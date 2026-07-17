@@ -25,7 +25,10 @@ V-2 SRT/TXT structural equivalence ------ BLOCK on cue/line drift
 privacy release envelope
         |
         v
-pinned vendor/digqda pilot -------------- local Ollama only
+pinned vendor/digqda pilot -------------- local Ollama only; think=false bound
+        |
+        v
+post-output identifier scan ------------- methodological review still required
 ```
 
 ## Trust boundaries
@@ -50,3 +53,24 @@ The privacy release envelope must bind hashes for the protected input, released
 source, policy, Presidio version, NLP models, recognizers, language, thresholds,
 review decision and pinned DigQDA snapshot. It must contain no clear-text PII.
 
+## Implemented artifact state machine
+
+```text
+scan -> REVIEW_REQUIRED -> accepted review -> transform
+     -> second-pass PASS + structure PASS -> PRIVACY_RELEASED
+     -> exact model/digest + upstream revalidation -> DOWNSTREAM_REVIEW_REQUIRED
+```
+
+Artifacts use canonical JSON and SHA-256 integrity fields. Reviews may also use
+an external Ed25519 key; the current self-contained public key proves possession
+but becomes an identity proof only after its fingerprint is bound to the later
+infrastructure trust store. There is no reversible identity map: the exact
+value-to-surrogate dictionary exists only during `transform` and is cleared
+before the release envelope is written.
+
+The consumer-owned adapter injects a narrowly scoped, hash-bound Python
+runtime shim which sets Ollama `think=false`. This leaves the pinned DigQDA
+snapshot untouched and prevents reasoning-capable Gemma models from exhausting
+the JSON output budget in a separate thinking channel. The setting and shim
+hash are recorded in successful adapter manifests and blocked-attempt
+envelopes.

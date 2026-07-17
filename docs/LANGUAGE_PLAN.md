@@ -4,14 +4,20 @@
 
 - German (`de`)
 - French (`fr`)
-- Luxembourgish (`lb`)
 - English (`en`)
 
-Presidio's NLP engine and recognizers must be configured per language. German,
-French and English may start with suitable local spaCy/Stanza models plus rule
-recognizers. Luxembourgish requires an explicit tokenizer/NER decision and
-custom recognizers; it must remain fail-closed until its synthetic recall suite
-passes. Language fallback is forbidden.
+German, French and English use installed local spaCy 3.8 large NER packages
+(`de_core_news_lg`, `fr_core_news_lg`, `en_core_web_lg`) together with the
+versioned AegisQDA recognizers. Their curated synthetic suite is a bounded
+acceptance check, not a general recall claim.
+
+## Optional language
+
+- Luxembourgish (`lb`)
+
+Luxembourgish has a synthetic rule fixture but no approved local NER strategy.
+It remains blocked per run and does not block readiness for the three required
+languages. Language fallback is forbidden.
 
 Each language needs synthetic cases for:
 
@@ -22,4 +28,3 @@ Each language needs synthetic cases for:
 - code-switching and spelling variation;
 - indirect identification and rare-event combinations;
 - safe non-PII controls to measure destructive over-redaction.
-

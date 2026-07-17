@@ -24,7 +24,7 @@ invocation.
 - zero clear-text seeded identifier in released sources and general logs;
 - explicit false-positive reporting; precision is reviewed but never traded for
   recall silently;
-- all four languages have independent reports.
+- de/fr/en have independent required reports; optional lb has an independent
+  report and remains fail-closed.
 
 These are fixture-scoped acceptance targets, not a universal anonymity claim.
-

@@ -1,5 +1,10 @@
 # Megaprompt — build the AegisQDA local CLI MVP
 
+> Historical bootstrap specification. Its `gemma4:12b` model decision was
+> superseded on 2026-07-17 after the full structured-output smoke rejected that
+> model. Current operational truth lives in `config/aegisqda.local.yaml` and
+> `docs/COMPATIBILITY_EVIDENCE.md`.
+
 Copy everything below into a fresh Codex context whose workspace is
 `/Users/klaus.behnamshad/Projects/AegisQDA`.
 
@@ -261,4 +266,3 @@ Lead every progress report with the actual gate state. Keep all work inside
 AegisQDA. No cloud, no API, no silent fallback, no false anonymity guarantee.
 
 ---
-

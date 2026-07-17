@@ -30,3 +30,21 @@ Human reviewers can miss indirect identifiers and language models/recognizers ca
 have blind spots. AegisQDA must report residual risk and the tested scope instead
 of claiming universal anonymity.
 
+The MVP combines a deliberately narrow custom rule pack with installed local
+large spaCy NER packages for de/fr/en. Both are measured only on curated
+synthetic fixtures; this does not establish open-world recall. Luxembourgish
+has no approved local tokenizer/NER strategy and is blocked before source
+reading. SHA-256 review
+integrity alone is not an identity proof; optional Ed25519 reviews remain
+self-signed until the public-key fingerprint is infrastructure-trusted. Local
+administrators can modify protected files, exact-value hashes may be guessable for low-entropy identifiers, and a
+reviewer can make a wrong false-positive decision. These limitations prohibit
+real-data use and unattended release.
+
+Post-DigQDA scanning covers text fields in the result and validation envelopes.
+Bound source/evidence fields are scanned in the declared source language, while
+DigQDA's generated analytical prose is scanned in the contract language German.
+This routing is a bounded assumption and must be revisited if the pinned prompt
+language changes. It does not establish that generated prose is safe to
+publish. DigQDA results
+therefore end in `DOWNSTREAM_REVIEW_REQUIRED`, never an external-release state.

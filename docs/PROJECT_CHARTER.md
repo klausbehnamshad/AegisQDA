@@ -4,7 +4,8 @@
 
 Build a completely local command-line privacy gateway which prepares qualitative
 SRT/TXT material for the pinned DigQDA method pipeline. The first MVP is
-synthetic-only and covers German, French, Luxembourgish and English.
+synthetic-only, requires German, French and English, and reports Luxembourgish
+as an explicitly blocked optional language until its NLP strategy is approved.
 
 ## Fixed decisions
 
@@ -13,7 +14,9 @@ synthetic-only and covers German, French, Luxembourgish and English.
 - DigQDA is a pinned, read-only upstream snapshot.
 - Runtime has no cloud service and no remote API.
 - Ollama is loopback-only.
-- Local `gemma4:12b` is the default analysis target; no silent fallback.
+- Local `gemma3:4b` is the default analysis target; no silent fallback.
+- `gemma4:e4b` is an explicit verified reference, not an automatic fallback.
+- `gemma4:12b` is rejected for this host and structured contract.
 - Human review is mandatory before downstream analysis.
 - Strict policy blocks on uncertainty.
 
@@ -33,4 +36,3 @@ structural invariant, provenance check and human sign-off has succeeded.
 - unattended batch release;
 - processing real research material before synthetic evaluation thresholds and
   the internal DPO procedure are complete.
-

@@ -1,0 +1,4 @@
+Je m'appelle Élise Exemple et j'habite à Petitville. Je travaille pour Association Exemple.
+Ma mère est médecin et a 97 ans; elle est la seule survivante dans un petit village.
+Contact: elise@invalid.example, https://invalid.example/fr, +352 621 123 456.
+Technique: 192.0.2.11. IBAN: LU28 0019 4006 4475 0000. Date: 17.07.2026. Cas: CASE-FR-999.

@@ -1,0 +1,50 @@
+{
+  "language_gate": {
+    "de": "READY_FOR_SYNTHETIC_SCAN",
+    "fr": "READY_FOR_SYNTHETIC_SCAN",
+    "en": "READY_FOR_SYNTHETIC_SCAN",
+    "lb": "BLOCKED_OPTIONAL"
+  },
+  "seeds": {
+    "de": [
+      ["PERSON", "Erika Muster"], ["LOCATION", "Kleindorf"],
+      ["ORGANIZATION", "Muster GmbH"], ["KINSHIP", "Mutter"],
+      ["JOB_TITLE", "Ärztin"], ["AGE", "97 Jahre alt"],
+      ["RARE_EVENT", "einzige Überlebende"], ["SMALL_PLACE", "kleinen Dorf"],
+      ["EMAIL_ADDRESS", "erika@invalid.example"], ["URL", "https://invalid.example/de"],
+      ["PHONE_NUMBER", "+352 621 123 456"], ["IP_ADDRESS", "192.0.2.10"],
+      ["IBAN_CODE", "LU28 0019 4006 4475 0000"], ["DATE_TIME", "17.07.2026"],
+      ["PROJECT_IDENTIFIER", "CASE-DE-999"]
+    ],
+    "fr": [
+      ["PERSON", "Élise Exemple"], ["LOCATION", "Petitville"],
+      ["ORGANIZATION", "Association Exemple"], ["KINSHIP", "mère"],
+      ["JOB_TITLE", "médecin"], ["AGE", "97 ans"],
+      ["RARE_EVENT", "seule survivante"], ["SMALL_PLACE", "petit village"],
+      ["EMAIL_ADDRESS", "elise@invalid.example"], ["URL", "https://invalid.example/fr"],
+      ["PHONE_NUMBER", "+352 621 123 456"], ["IP_ADDRESS", "192.0.2.11"],
+      ["IBAN_CODE", "LU28 0019 4006 4475 0000"], ["DATE_TIME", "17.07.2026"],
+      ["PROJECT_IDENTIFIER", "CASE-FR-999"]
+    ],
+    "en": [
+      ["PERSON", "Jane Example"], ["LOCATION", "Smalltown"],
+      ["ORGANIZATION", "Example Foundation"], ["KINSHIP", "mother"],
+      ["JOB_TITLE", "doctor"], ["AGE", "97 years old"],
+      ["RARE_EVENT", "only survivor"], ["SMALL_PLACE", "small village"],
+      ["EMAIL_ADDRESS", "jane@invalid.example"], ["URL", "https://invalid.example/en"],
+      ["PHONE_NUMBER", "+352 621 123 456"], ["IP_ADDRESS", "192.0.2.12"],
+      ["IBAN_CODE", "LU28 0019 4006 4475 0000"], ["DATE_TIME", "17.07.2026"],
+      ["PROJECT_IDENTIFIER", "CASE-EN-999"]
+    ],
+    "lb": [
+      ["PERSON", "Anne Beispill"], ["LOCATION", "Beispillstad"],
+      ["ORGANIZATION", "Fondatioun Beispill"], ["KINSHIP", "Mamm"],
+      ["JOB_TITLE", "Dokter"], ["AGE", "97 Joer al"],
+      ["RARE_EVENT", "eenzeg Iwwerliewend"], ["SMALL_PLACE", "klengt Duerf"],
+      ["EMAIL_ADDRESS", "anne@invalid.example"], ["URL", "https://invalid.example/lb"],
+      ["PHONE_NUMBER", "+352 621 123 456"], ["IP_ADDRESS", "192.0.2.13"],
+      ["IBAN_CODE", "LU28 0019 4006 4475 0000"], ["DATE_TIME", "17.07.2026"],
+      ["PROJECT_IDENTIFIER", "CASE-LB-999"]
+    ]
+  }
+}

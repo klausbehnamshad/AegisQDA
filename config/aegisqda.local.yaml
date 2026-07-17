@@ -7,13 +7,14 @@ execution:
   fail_on_proxy_environment: true
 
 languages:
-  required: [de, fr, lb, en]
+  required: [de, fr, en]
+  optional: [lb]
   reject_undeclared_language: true
 
 models:
-  default: "gemma4:12b"
+  default: "gemma3:4b"
   dpo_approved_local_allowlist:
-    - "gemma4:12b"
+    - "gemma3:4b"
     - "gemma4:e4b"
   require_exact_ollama_tag: true
   require_digest_binding: true
@@ -33,3 +34,7 @@ digqda:
   lock: "UPSTREAM.lock.json"
   invoke_only_after_privacy_release: true
 
+authorization:
+  real_data_enabled: false
+  required_attestation_schema: "aegisqda-infrastructure-attestation-v1"
+  trusted_review_key_ids: []
