@@ -1,0 +1,38 @@
+policy_id: AEGIS-STRICT-LOCAL-001
+version: "0.1.0"
+default_action: BLOCK
+
+release_requirements:
+  - analyzer_completed
+  - all_detections_resolved
+  - second_pass_has_no_unresolved_findings
+  - source_structure_preserved
+  - human_reviewer_signed
+  - no_remote_endpoint_observed
+
+replacement:
+  style: typed_sequential_surrogate
+  examples: ["[PERSON_001]", "[ORG_001]", "[LOCATION_001]"]
+  stable_within_document: true
+  stable_across_documents: false
+  retain_mapping_after_release: false
+
+entities:
+  PERSON: REPLACE_AND_REVIEW
+  PHONE_NUMBER: REPLACE_AND_REVIEW
+  EMAIL_ADDRESS: REPLACE_AND_REVIEW
+  LOCATION: REPLACE_AND_REVIEW
+  ORGANIZATION: REPLACE_AND_REVIEW
+  IBAN_CODE: REPLACE_AND_REVIEW
+  CREDIT_CARD: REPLACE_AND_REVIEW
+  IP_ADDRESS: REPLACE_AND_REVIEW
+  URL: REPLACE_AND_REVIEW
+  DATE_TIME: GENERALIZE_AND_REVIEW
+  NRP: BLOCK_AND_REVIEW
+  MEDICAL_LICENSE: REPLACE_AND_REVIEW
+  PROJECT_IDENTIFIER: REPLACE_AND_REVIEW
+  SMALL_PLACE: BLOCK_AND_REVIEW
+  RARE_EVENT: BLOCK_AND_REVIEW
+
+unsupported_or_ambiguous: BLOCK
+

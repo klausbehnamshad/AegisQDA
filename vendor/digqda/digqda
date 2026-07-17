@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""Stable, method-first entry point for the local DigQDA workflow."""
+
+from pathlib import Path
+import os
+import sys
+
+ROOT = Path(__file__).resolve().parent
+VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
+
+# Prefer the repository-local environment when it exists, so `./digqda` behaves
+# the same whether or not the caller remembered to activate `.venv`.
+if (
+    VENV_PYTHON.is_file()
+    and Path(sys.prefix).resolve() != (ROOT / ".venv").resolve()
+    and os.environ.get("DIGQDA_NO_VENV_REEXEC") != "1"
+):
+    os.execv(
+        str(VENV_PYTHON),
+        [str(VENV_PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]],
+    )
+
+sys.path.insert(0, str(ROOT / "90_UTILITIES"))
+
+from digqda_cli import main  # noqa: E402
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digqda/schemas/p0_units.schema.json",
+  "title": "DigQDA P0 source-unit envelope (v0.1)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["meta", "source_units"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["source_type", "source_sha256", "n_units"],
+      "properties": {
+        "source_type": {"type": "string", "enum": ["srt", "txt"]},
+        "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "n_units": {"type": "integer", "minimum": 0}
+      }
+    },
+    "source_units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["unit_id", "source_type", "source_range", "source_text"],
+        "properties": {
+          "unit_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+          },
+          "source_type": {"type": "string", "enum": ["srt", "txt"]},
+          "source_range": {"type": "string", "minLength": 1},
+          "explicit_speaker": {"type": "string"},
+          "source_text": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

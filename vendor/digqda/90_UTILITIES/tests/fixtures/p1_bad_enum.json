@@ -1,0 +1,12 @@
+{
+  "concise_description": "Die eigenen Vasen sind am Ende gelungen.",
+  "narrative_function": "STORYTELLING",
+  "coding_decision": "CODES_ASSIGNED",
+  "descriptive_codes": [
+    {"code_label": "gelungene Vasen",
+     "definition": "die eigenen Vasen werden als am Ende gelungen beschrieben",
+     "status": "INDUCTIVE_CANDIDATE",
+     "source_quote": "Meine Vasen sind am Ende richtig schön geworden"}
+  ],
+  "uncertainty": []
+}

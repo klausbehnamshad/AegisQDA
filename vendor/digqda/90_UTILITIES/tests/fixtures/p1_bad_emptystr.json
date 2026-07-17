@@ -1,0 +1,9 @@
+{
+  "concise_description": "Etwas.",
+  "narrative_function": "EVALUATION",
+  "coding_decision": "CODES_ASSIGNED",
+  "descriptive_codes": [
+    {"code_label": "a", "definition": "b", "status": "INDUCTIVE_CANDIDATE", "source_quote": ""}
+  ],
+  "uncertainty": []
+}

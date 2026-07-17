@@ -1,0 +1,13 @@
+{
+  "meta": {
+    "source_type": "srt"
+  },
+  "source_units": [
+    {
+      "unit_id": "S01",
+      "source_type": "srt",
+      "source_range": "00:00:01,000 --> 00:00:04,500",
+      "source_text": "Also am Anfang war das für mich schwierig."
+    }
+  ]
+}

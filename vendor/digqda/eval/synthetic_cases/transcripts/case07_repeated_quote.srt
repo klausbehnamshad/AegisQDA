@@ -1,0 +1,11 @@
+1
+00:00:01,000 --> 00:00:05,000
+B: Das war ein wirklich schwieriges Jahr für uns.
+
+2
+00:00:09,000 --> 00:00:14,000
+B: Damals mussten wir vieles neu organisieren.
+
+3
+00:00:18,000 --> 00:00:23,000
+B: Das war ein wirklich schwieriges Jahr für uns.

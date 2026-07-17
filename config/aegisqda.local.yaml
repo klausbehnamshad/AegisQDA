@@ -1,0 +1,35 @@
+execution:
+  local_only: true
+  allow_remote_api: false
+  allow_cloud_service: false
+  ollama_base_url: "http://127.0.0.1:11434"
+  require_loopback: true
+  fail_on_proxy_environment: true
+
+languages:
+  required: [de, fr, lb, en]
+  reject_undeclared_language: true
+
+models:
+  default: "gemma4:12b"
+  dpo_approved_local_allowlist:
+    - "gemma4:12b"
+    - "gemma4:e4b"
+  require_exact_ollama_tag: true
+  require_digest_binding: true
+  forbid_silent_fallback: true
+
+privacy:
+  policy: "policies/strict.yaml"
+  default_action: block
+  require_second_pass_scan: true
+  require_human_review: true
+  require_structural_equivalence: true
+  reversible_mapping: false
+  cross_document_linkability: false
+
+digqda:
+  snapshot: "vendor/digqda"
+  lock: "UPSTREAM.lock.json"
+  invoke_only_after_privacy_release: true
+

@@ -1,0 +1,19 @@
+{
+  "upstream": "DigQDA",
+  "source_repository": "/Users/klaus.behnamshad/Projects/DigQDA",
+  "source_branch": "main",
+  "source_commit": "530554451d52dcdaaf62a29d6084b85a481be345",
+  "snapshot_path": "vendor/digqda",
+  "snapshot_manifest_algorithm": "sha256(sorted sha256(file-content) lines)",
+  "snapshot_manifest_sha256": "f36e0654ce3d959bf1a142572afc6b065ba93eca20816f9da04ac85160f307f0",
+  "excluded": [
+    ".git",
+    ".venv",
+    "Python caches",
+    "eval/out",
+    "90_UTILITIES/smoke/out",
+    "quarantine"
+  ],
+  "integration_rule": "AegisQDA consumes this snapshot; it never writes into the sibling DigQDA repository."
+}
+

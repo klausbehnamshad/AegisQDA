@@ -1,0 +1,9 @@
+{
+  "concise_description": "Nur Begrüßung.",
+  "narrative_function": "ORIENTATION",
+  "coding_decision": "NOTHING_CODABLE",
+  "descriptive_codes": [
+    {"code_label": "a", "definition": "b", "status": "INDUCTIVE_CANDIDATE", "source_quote": "q"}
+  ],
+  "uncertainty": []
+}

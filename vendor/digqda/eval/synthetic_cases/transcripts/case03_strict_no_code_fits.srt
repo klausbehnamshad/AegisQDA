@@ -1,0 +1,3 @@
+1
+00:00:01,000 --> 00:00:07,000
+B: Der Bus war heute früh wieder total überfüllt, ich musste die ganze Strecke über stehen.

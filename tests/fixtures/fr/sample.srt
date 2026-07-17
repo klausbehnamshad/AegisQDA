@@ -1,0 +1,4 @@
+1
+00:00:01,000 --> 00:00:07,000
+B: Je m'appelle Alice Exemple et j'habite à Ville-Exemple. Mon adresse est alice@example.com.
+

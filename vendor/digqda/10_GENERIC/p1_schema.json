@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QDA-GEN-DESCRIPTIVE-CODING P1 model output (one source unit)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "concise_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "narrative_function": {
+      "type": "string",
+      "enum": [
+        "ORIENTATION",
+        "EVENT_REPORT",
+        "EVALUATION",
+        "EXPLANATION_JUSTIFICATION",
+        "COMPARISON",
+        "GENERAL_STATEMENT",
+        "OTHER"
+      ]
+    },
+    "coding_decision": {
+      "type": "string",
+      "enum": [
+        "CODES_ASSIGNED",
+        "NO_CODE_FITS",
+        "NOTHING_CODABLE"
+      ]
+    },
+    "descriptive_codes": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code_label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "definition": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CODEBOOK_APPLIED",
+              "CODEBOOK_AMBIGUOUS",
+              "INDUCTIVE_CANDIDATE"
+            ]
+          },
+          "source_quote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "code_label",
+          "definition",
+          "status",
+          "source_quote"
+        ]
+      }
+    },
+    "uncertainty": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "required": [
+    "concise_description",
+    "narrative_function",
+    "coding_decision",
+    "descriptive_codes",
+    "uncertainty"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"coding_decision": {"const": "CODES_ASSIGNED"}},
+        "required": ["coding_decision"]
+      },
+      "then": {
+        "properties": {"descriptive_codes": {"minItems": 1}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"coding_decision": {"enum": ["NO_CODE_FITS", "NOTHING_CODABLE"]}},
+        "required": ["coding_decision"]
+      },
+      "then": {
+        "properties": {"descriptive_codes": {"maxItems": 0}}
+      }
+    }
+  ]
+}

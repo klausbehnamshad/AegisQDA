@@ -1,0 +1,16 @@
+[
+  {
+    "unit_id": "S01",
+    "source_range": "00:00:01,000 --> 00:00:12,000",
+    "coding_decision": "CODES_ASSIGNED",
+    "descriptive_codes": [
+      {
+        "code_label": "gelungene Vasen",
+        "status": "INDUCTIVE_CANDIDATE",
+        "source_quote": "Meine Vasen sind am Ende richtig schön geworden",
+        "quote_locator": "00:00:01,000 --> 00:00:12,000"
+      }
+    ],
+    "uncertainty": []
+  }
+]

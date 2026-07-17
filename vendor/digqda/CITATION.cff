@@ -1,0 +1,31 @@
+# Citation File Format 1.2.0 — https://citation-file-format.github.io
+# Repository URL is set below. ORCID, DOI and date-released are added during
+# the release runbook (see docs/RELEASE_RUNBOOK.md).
+cff-version: 1.2.0
+message: "Wenn Sie dieses Werkzeug verwenden, zitieren Sie es bitte wie folgt."
+title: "DigQDA — Digital QDA (AI-assisted): evidence-bound qualitative data analysis with local models"
+abstract: >-
+  An open, versioned method-contract toolkit for evidence-bound qualitative
+  data analysis (QDA) with local language models. The model proposes;
+  deterministic code verifies. Single-purpose, human-in-the-loop analytic
+  operations with an explicit method claim, strict output schema, external
+  quote/locator validation, and fail-closed semantics.
+type: software
+authors:
+  - family-names: Behnamshad
+    given-names: Klaus
+    # orcid: "https://orcid.org/0000-0000-0000-0000"   # TODO: your ORCID (release step 1)
+version: "0.4.0"
+repository-code: "https://github.com/klausbehnamshad/DigQDA"
+url: "https://github.com/klausbehnamshad/DigQDA"
+# doi: "10.5281/zenodo.XXXXXXX"     # TODO: Zenodo concept DOI (release step 5)
+# date-released: "2026-07-16"        # TODO: set on release day
+license: "MIT"
+keywords:
+  - qualitative data analysis
+  - QDA
+  - computer-assisted qualitative analysis
+  - local large language models
+  - evidence-bound coding
+  - human-in-the-loop
+  - oral history

@@ -1,0 +1,22 @@
+[
+  {
+    "unit_id": "S01",
+    "source_range": "00:00:01,000 --> 00:00:04,500",
+    "coding_decision": "CODES_ASSIGNED",
+    "descriptive_codes": [
+      {
+        "code_label": "belegt",
+        "status": "INDUCTIVE_CANDIDATE",
+        "source_quote": "am Anfang war das Töpfern ziemlich ungewohnt",
+        "quote_locator": "00:00:01,000 --> 00:00:04,500"
+      },
+      {
+        "code_label": "unbelegt",
+        "status": "INDUCTIVE_CANDIDATE",
+        "source_quote": "not stated",
+        "quote_locator": "00:00:01,000 --> 00:00:04,500"
+      }
+    ],
+    "uncertainty": []
+  }
+]
