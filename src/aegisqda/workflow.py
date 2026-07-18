@@ -12,7 +12,7 @@ from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig, RecognizerResult
 
 from .config import AppConfig, Policy, PolicyAction, ROOT, load_config, load_policy
-from .detection import detector_versions, scan_document
+from .detection import Finding, detector_versions, scan_document
 from .errors import IntegrityError, ReviewRequired
 from .formats.document import Document, fingerprint_text, parse_document, parse_document_bytes
 from .languages import get_pack
@@ -386,6 +386,18 @@ def transform_run(run_dir: Path) -> Path:
     transformed = document.text
     for start, end, replacement in reversed(replacements):
         transformed = transformed[:start] + _presidio_replace(transformed[start:end], "AEGIS_VALUE", replacement) + transformed[end:]
+    # Exact character ranges the emitted surrogates occupy in the transformed
+    # text. The second-pass scan must ignore a finding that lies *inside* a
+    # surrogate we just wrote (e.g. spaCy tagging "PERSON_001" as PERSON) — but
+    # only that: this is position-bound to surrogates AegisQDA generated, not a
+    # blanket exemption for bracketed text, which could hide real content.
+    surrogate_ranges: list[tuple[int, int]] = []
+    delta = 0
+    for start, end, replacement in sorted(replacements):
+        final_start = start + delta
+        final_end = final_start + len(replacement)
+        surrogate_ranges.append((final_start, final_end))
+        delta += len(replacement) - (end - start)
     mapping.clear()
     if fingerprint_text(transformed, document.kind) != document.fingerprint:
         raise IntegrityError("transform caused structural drift")
@@ -393,16 +405,28 @@ def transform_run(run_dir: Path) -> Path:
     atomic_write(run_dir / transformed_name, transformed.encode())
     transformed_doc = parse_document(run_dir / transformed_name)
     second_findings = scan_document(transformed_doc, str(detection["language"]), policy)
+
+    def _within_surrogate(finding: Finding) -> bool:
+        return any(rs <= finding.start and finding.end <= re for rs, re in surrogate_ranges)
+
+    surrogate_exemptions = [finding for finding in second_findings if _within_surrogate(finding)]
+    surrogate_exemption_set = set(surrogate_exemptions)
     unresolved = [
         finding
         for finding in second_findings
         if (finding.entity_type, finding.value_sha256) not in false_exemptions
+        and finding not in surrogate_exemption_set
     ]
     second_pass = seal(
         {
             "schema": "aegisqda-second-pass-v1",
             "created_at": utc_now(),
             "finding_count": len(second_findings),
+            "surrogate_ranges": [[start, end] for start, end in surrogate_ranges],
+            "surrogate_exempt_count": len(surrogate_exemptions),
+            "surrogate_exempt_finding_ids": [
+                finding.finding_id for finding in surrogate_exemptions
+            ],
             "unresolved_count": len(unresolved),
             "findings": [finding.public_dict() for finding in second_findings],
         }

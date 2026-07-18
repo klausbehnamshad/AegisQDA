@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Iterable, Iterator
 
 import spacy
+from spacy.tokens import Span
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer, RecognizerRegistry
 from presidio_analyzer.nlp_engine import NlpArtifacts, NlpEngine
 from presidio_analyzer.predefined_recognizers import SpacyRecognizer
@@ -18,6 +19,50 @@ from .config import Policy
 from .formats.document import Document, Region
 from .manifests import sha256_bytes
 from .languages import PACKS
+
+# Presidio's SpacyRecognizer.analyze (2.2.x) matches the *raw* spaCy label
+# against the recognizer's supported_entities and uses it verbatim as the
+# result entity_type. It does not consult CHECK_LABEL_GROUPS. The de/fr models
+# emit PER/LOC/ORG and the en model emits PERSON/GPE/LOC/ORG, so these must be
+# normalized to AegisQDA's policy entity names here, in the NLP engine, before
+# recognition. Labels with no mapping (e.g. MISC) are intentionally dropped.
+SPACY_LABEL_MAP = {
+    "PER": "PERSON",
+    "PERSON": "PERSON",
+    "LOC": "LOCATION",
+    "GPE": "LOCATION",
+    "LOCATION": "LOCATION",
+    "ORG": "ORGANIZATION",
+    "ORGANIZATION": "ORGANIZATION",
+}
+
+# spaCy NER entity types after normalization.
+NER_ENTITY_TYPES = {"PERSON", "LOCATION", "ORGANIZATION"}
+# High-precision structured recognizers (regex). When one of these fully contains
+# a spaCy PERSON/LOCATION/ORGANIZATION span, the NER label is a false positive
+# (e.g. part of an IBAN mislabelled ORGANIZATION) and is suppressed. Partial
+# overlaps remain visible so the reviewer resolves genuine ambiguity.
+STRONG_STRUCTURED_TYPES = {
+    "EMAIL_ADDRESS",
+    "IBAN_CODE",
+    "URL",
+    "IP_ADDRESS",
+    "PHONE_NUMBER",
+    "DATE_TIME",
+    "PROJECT_IDENTIFIER",
+    "CREDIT_CARD",
+    "MEDICAL_LICENSE",
+}
+
+# Conventional role markers at the beginning of a transcript line. They are
+# structural labels, not participant initials. Keep this deliberately narrow:
+# arbitrary one-letter labels remain reviewable findings.
+TRANSCRIPT_ROLE_MARKERS = {"I", "P"}
+
+# Structured field labels can themselves be misclassified by NER (for example
+# the English model labels the literal word "IBAN" as ORGANIZATION). Suppress
+# only when the cue directly introduces a detected structured value.
+STRUCTURED_FIELD_CUES = {"IBAN": "IBAN_CODE"}
 
 
 @dataclass(frozen=True)
@@ -56,8 +101,13 @@ class LocalNlpEngine(NlpEngine):
 
     def process_text(self, text: str, language: str) -> NlpArtifacts:
         doc = self.nlp(text)
+        normalized_entities = [
+            Span(doc, ent.start, ent.end, label=SPACY_LABEL_MAP[ent.label_])
+            for ent in doc.ents
+            if ent.label_ in SPACY_LABEL_MAP
+        ]
         return NlpArtifacts(
-            entities=list(doc.ents),
+            entities=normalized_entities,
             tokens=doc,
             tokens_indices=[token.idx for token in doc],
             lemmas=[token.text for token in doc],
@@ -86,7 +136,7 @@ class LocalNlpEngine(NlpEngine):
         return bool(re.fullmatch(r"\W+", word))
 
     def get_supported_entities(self) -> list[str]:
-        return ["PERSON", "ORG", "GPE", "LOC"]
+        return ["PERSON", "LOCATION", "ORGANIZATION"]
 
     def get_supported_languages(self) -> list[str]:
         return [self.language]
@@ -114,7 +164,10 @@ LANGUAGE_PATTERNS: dict[str, dict[str, list[tuple[str, str, float]]]] = {
             ("de-title-name", r"(?-i:\b(?:Herr|Frau|Dr\.) [A-ZÄÖÜ][\wÄÖÜäöüß'-]+(?: [A-ZÄÖÜ][\wÄÖÜäöüß'-]+){0,2})", 0.8),
         ],
         "LOCATION": [("de-location", r"(?<=wohne in )[A-ZÄÖÜ][\wÄÖÜäöüß-]+", 0.85)],
-        "ORGANIZATION": [("de-org", r"(?-i:\b(?:[A-ZÄÖÜ][\wÄÖÜäöüß-]+ ){1,3}(?:GmbH|AG|e\.V\.)\b)", 0.8)],
+        "ORGANIZATION": [
+            ("de-org", r"(?-i:\b(?:[A-ZÄÖÜ][\wÄÖÜäöüß-]+ ){1,3}(?:GmbH|AG|e\.V\.)\b)", 0.8),
+            ("de-cultural-org", r"(?-i:\bKulturzentrum [A-ZÄÖÜ][\wÄÖÜäöüß'-]+)", 0.9),
+        ],
     },
     "fr": {
         "PERSON": [
@@ -122,15 +175,25 @@ LANGUAGE_PATTERNS: dict[str, dict[str, list[tuple[str, str, float]]]] = {
             ("fr-title-name", r"(?-i:\b(?:M\.|Mme|Dr) [A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]+(?: [A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]+){0,2})", 0.8),
         ],
         "LOCATION": [("fr-location", r"(?<=habite à )[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ-]+", 0.85)],
-        "ORGANIZATION": [("fr-org", r"(?-i:\b(?:Association|Société|Université) [A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]+)", 0.8)],
+        "ORGANIZATION": [
+            ("fr-org", r"(?-i:\b(?:Association|Société|Université) [A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]+)", 0.8),
+            ("fr-group-org", r"(?<=groupe )[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]+", 0.9),
+            ("fr-cultural-org", r"(?<=centre culturel )[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'-]+", 0.9),
+        ],
     },
     "en": {
         "PERSON": [
             ("en-name", r"(?<=name is ).+?(?= and I live)", 0.9),
             ("en-title-name", r"(?-i:\b(?:Mr\.|Ms\.|Mrs\.|Dr\.) [A-Z][A-Za-z'-]+(?: [A-Z][A-Za-z'-]+){0,2})", 0.8),
         ],
-        "LOCATION": [("en-location", r"(?<=live in )[A-Z][A-Za-z-]+", 0.85)],
-        "ORGANIZATION": [("en-org", r"(?-i:\b(?:[A-Z][A-Za-z'-]+ ){1,3}(?:Inc\.|Ltd\.|University|Foundation)\b)", 0.8)],
+        "LOCATION": [
+            ("en-location", r"(?<=live in )[A-Z][A-Za-z-]+", 0.85),
+            ("en-based-location", r"(?<=based in )[A-Z][A-Za-z-]+", 0.9),
+        ],
+        "ORGANIZATION": [
+            ("en-org", r"(?-i:\b(?:[A-Z][A-Za-z'-]+ ){1,3}(?:Inc\.|Ltd\.|University|Foundation)\b)", 0.8),
+            ("en-cultural-org", r"(?-i:\b[A-Z][A-Za-z'-]+(?= cultural centre\b))", 0.9),
+        ],
     },
     "lb": {
         "PERSON": [
@@ -186,7 +249,7 @@ def detector_versions(language: str) -> dict[str, object]:
         "nlp_strategy": installed_model or f"spacy.blank:{language}",
         "ner_model": installed_model,
         "threshold": 0.5,
-        "recognizer_pack": "aegis-custom-strict-v1",
+        "recognizer_pack": "aegis-custom-strict-v2",
     }
 
 
@@ -203,11 +266,57 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
     )
     candidates = [item for item in results if _inside_regions(item.start, item.end, document.regions)]
     candidates.sort(key=lambda item: (item.start, -(item.end - item.start), item.entity_type))
+    strong_candidates = [item for item in candidates if item.entity_type in STRONG_STRUCTURED_TYPES]
+    contextual_candidates = [
+        item
+        for item in candidates
+        if item.entity_type in NER_ENTITY_TYPES
+        and not str(item.recognition_metadata.get("recognizer_name", "")).endswith("spaCy-NER")
+        and float(item.score) >= 0.8
+    ]
     findings: list[Finding] = []
     seen_exact: set[tuple[int, int, str]] = set()
     for item in candidates:
         if document.text[item.start:item.end].startswith("[") and document.text[item.start:item.end].endswith("]"):
             continue
+        recognizer = str(item.recognition_metadata.get("recognizer_name", ""))
+        is_spacy_ner = item.entity_type in NER_ENTITY_TYPES and recognizer.endswith("spaCy-NER")
+        if is_spacy_ner:
+            value = document.text[item.start:item.end]
+            line_start = item.start == 0 or document.text[item.start - 1] == "\n"
+            if (
+                value in TRANSCRIPT_ROLE_MARKERS
+                and line_start
+                and document.text[item.end:item.end + 1] == ":"
+            ):
+                continue
+
+            # A structured recognizer may overrule NER only when it fully
+            # contains the NER span. Partial overlap remains visible: it could
+            # include real adjacent content and therefore requires review.
+            if any(
+                strong.start <= item.start and item.end <= strong.end
+                for strong in strong_candidates
+            ):
+                continue
+
+            cue_type = STRUCTURED_FIELD_CUES.get(value.upper())
+            if cue_type and any(
+                strong.entity_type == cue_type
+                and item.end <= strong.start
+                and re.fullmatch(r"\s*:\s*", document.text[item.end:strong.start])
+                for strong in strong_candidates
+            ):
+                continue
+
+            # High-confidence contextual rules (e.g. "based in Esch" or
+            # "centre culturel Ariston") are more specific than a generic NER
+            # label. Suppress only a contained NER span, never a partial one.
+            if any(
+                rule.start <= item.start and item.end <= rule.end
+                for rule in contextual_candidates
+            ):
+                continue
         # Rules and NER may independently report the same typed span. Collapse
         # only that exact duplicate; preserve all partial or cross-type overlaps
         # so ambiguity remains visible to the reviewer and blocks release.

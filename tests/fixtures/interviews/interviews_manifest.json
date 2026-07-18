@@ -1,0 +1,711 @@
+{
+  "schema": "aegisqda-synthetic-interview-corpus-v2",
+  "suite_type": "red-expected de-identification acceptance suite",
+  "purpose": "Exercise the AegisQDA gateway end to end on interview-shaped input and measure de-identification. This is an acceptance/measurement corpus, not a green happy-path: on any given host, expected identifiers may still leak (e.g. NER recall gaps), and the verifier reports exactly which. It is neither an anonymity claim nor a recall claim.",
+  "synthetic_disclosure": "No real person and no real personal data. Contact identifiers are dummy values: e-mail/URL use RFC 2606 reserved domains (*.invalid, *.example); IP addresses are RFC 5737 TEST-NET; IBANs are structurally-valid LU patterns with invalid check digits; phone numbers are documentation-style +352 621 xxx xxx and are NOT verified as unassigned. Place names (Esch, Dudelange/Düdelingen) are real Luxembourg municipalities used only as a neutral geographic setting; they carry no linkage to any real individual. Names and organisations are invented.",
+  "offsets": "Python str character indices over UTF-8 decoded text (as the detector reports).",
+  "ner_note": "PERSON/ORGANIZATION/LOCATION are found by the installed spaCy models (de/fr/en) once detection.py normalises PER/LOC/ORG/GPE labels to the policy entity names. Values here are best-effort expectations for recall measurement; a miss is a reported residual-risk finding, not a verifier bug.",
+  "expected_outcomes": {
+    "clean": "no block-action findings; after confirm+transform, a second real scan finds zero residual identifiers. Any surviving expected value is a FAIL.",
+    "block": "contains block-action indirect identifiers; release is fail-closed.",
+    "safe": "zero findings from the real detector (over-redaction guard)."
+  },
+  "files": [
+    {
+      "path": "de/expert_clean.srt",
+      "language": "de",
+      "format": "srt",
+      "kind": "clean",
+      "source_sha256": "31938aa8eb7ba83c5255e73593deed22e94524e975b6439f8e0a821d854f5730",
+      "source_bytes": 3277,
+      "cues": 18,
+      "seeded_regex": [
+        {
+          "type": "DATE_TIME",
+          "value": "14.03.2026",
+          "spans": [
+            [
+              680,
+              690
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "EMAIL_ADDRESS",
+          "value": "maria.berger@invalid.example",
+          "spans": [
+            [
+              2750,
+              2778
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "IBAN_CODE",
+          "value": "LU12 3456 7890 1234 5678",
+          "spans": [
+            [
+              3075,
+              3099
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "IP_ADDRESS",
+          "value": "198.51.100.24",
+          "spans": [
+            [
+              1334,
+              1347
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "PHONE_NUMBER",
+          "value": "+352 621 234 567",
+          "spans": [
+            [
+              2806,
+              2822
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "PROJECT_IDENTIFIER",
+          "value": "STUDY-LUX-2026-07",
+          "spans": [
+            [
+              630,
+              647
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "URL",
+          "value": "https://portal.invalid.example/beteiligung",
+          "spans": [
+            [
+              1043,
+              1085
+            ]
+          ],
+          "occurrences": 1
+        }
+      ],
+      "ner_expected_best_effort": [
+        {
+          "type": "PERSON",
+          "value": "Maria Berger",
+          "spans": [
+            [
+              190,
+              202
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "PERSON",
+          "value": "Thomas Klein",
+          "spans": [
+            [
+              2029,
+              2041
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "ORGANIZATION",
+          "value": "Novaform-Gruppe",
+          "spans": [
+            [
+              549,
+              564
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "ORGANIZATION",
+          "value": "Kulturzentrum Ariston",
+          "spans": [
+            [
+              2081,
+              2102
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "LOCATION",
+          "value": "Esch",
+          "spans": [
+            [
+              581,
+              585
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "LOCATION",
+          "value": "Düdelingen",
+          "spans": [
+            [
+              2106,
+              2116
+            ]
+          ],
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "path": "de/participant_blockdemo.txt",
+      "language": "de",
+      "format": "txt",
+      "kind": "block",
+      "source_sha256": "841b331bc99fa6e27ce46f6bd55e20bf146dea5da11d033bec51afa3f41584ff",
+      "source_bytes": 1070,
+      "seeded_regex": [
+        {
+          "type": "AGE",
+          "value": "97 Jahre alt",
+          "spans": [
+            [
+              172,
+              184
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "JOB_TITLE",
+          "value": "Ärztin",
+          "spans": [
+            [
+              147,
+              153
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "KINSHIP",
+          "value": "Mutter",
+          "spans": [
+            [
+              131,
+              137
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "RARE_EVENT",
+          "value": "einzige Überlebende",
+          "spans": [
+            [
+              230,
+              249
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "SMALL_PLACE",
+          "value": "kleinen Dorf",
+          "spans": [
+            [
+              259,
+              271
+            ]
+          ],
+          "occurrences": 1
+        }
+      ],
+      "ner_expected_best_effort": []
+    },
+    {
+      "path": "de/safe_control.txt",
+      "language": "de",
+      "format": "txt",
+      "kind": "safe",
+      "source_sha256": "81df3c422f44352a6932fe6e0990aa1ac1403826090000ea83f6da2c8664a597",
+      "source_bytes": 1102,
+      "seeded_regex": [],
+      "ner_expected_best_effort": []
+    },
+    {
+      "path": "fr/expert_clean.srt",
+      "language": "fr",
+      "format": "srt",
+      "kind": "clean",
+      "source_sha256": "db0308f63e5ead5e70296dfce7459574da65291be6c7ab8a67cee37344b502d2",
+      "source_bytes": 3224,
+      "cues": 18,
+      "seeded_regex": [
+        {
+          "type": "DATE_TIME",
+          "value": "09.04.2026",
+          "spans": [
+            [
+              686,
+              696
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "EMAIL_ADDRESS",
+          "value": "camille.rousseau@invalid.example",
+          "spans": [
+            [
+              2711,
+              2743
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "IBAN_CODE",
+          "value": "LU21 0011 2233 4455 6677",
+          "spans": [
+            [
+              3027,
+              3051
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "IP_ADDRESS",
+          "value": "203.0.113.45",
+          "spans": [
+            [
+              1326,
+              1338
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "PHONE_NUMBER",
+          "value": "+352 621 345 678",
+          "spans": [
+            [
+              2781,
+              2797
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "PROJECT_IDENTIFIER",
+          "value": "STUDY-LUX-2026-11",
+          "spans": [
+            [
+              632,
+              649
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "URL",
+          "value": "https://portail.invalid.example/participation",
+          "spans": [
+            [
+              1023,
+              1068
+            ]
+          ],
+          "occurrences": 1
+        }
+      ],
+      "ner_expected_best_effort": [
+        {
+          "type": "PERSON",
+          "value": "Camille Rousseau",
+          "spans": [
+            [
+              180,
+              196
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "PERSON",
+          "value": "Julien Meyer",
+          "spans": [
+            [
+              1965,
+              1977
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "ORGANIZATION",
+          "value": "Novaform",
+          "spans": [
+            [
+              557,
+              565
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "ORGANIZATION",
+          "value": "Ariston",
+          "spans": [
+            [
+              2031,
+              2038
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "LOCATION",
+          "value": "Esch",
+          "spans": [
+            [
+              578,
+              582
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "LOCATION",
+          "value": "Dudelange",
+          "spans": [
+            [
+              2041,
+              2050
+            ]
+          ],
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "path": "fr/participant_blockdemo.txt",
+      "language": "fr",
+      "format": "txt",
+      "kind": "block",
+      "source_sha256": "4cde306429ba0bf7fedf03c72a493578feda7b3eb1cb34364b7f51ef636f8149",
+      "source_bytes": 1054,
+      "seeded_regex": [
+        {
+          "type": "AGE",
+          "value": "97 ans",
+          "spans": [
+            [
+              182,
+              188
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "JOB_TITLE",
+          "value": "médecin",
+          "spans": [
+            [
+              152,
+              159
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "KINSHIP",
+          "value": "mère",
+          "spans": [
+            [
+              135,
+              139
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "RARE_EVENT",
+          "value": "seule survivante",
+          "spans": [
+            [
+              238,
+              254
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "SMALL_PLACE",
+          "value": "petit village",
+          "spans": [
+            [
+              263,
+              276
+            ]
+          ],
+          "occurrences": 1
+        }
+      ],
+      "ner_expected_best_effort": []
+    },
+    {
+      "path": "fr/safe_control.txt",
+      "language": "fr",
+      "format": "txt",
+      "kind": "safe",
+      "source_sha256": "2a8812772ca9781d1a31145cfaa75024b11753e465bf1b34b27f3f8f74837acb",
+      "source_bytes": 1191,
+      "seeded_regex": [],
+      "ner_expected_best_effort": []
+    },
+    {
+      "path": "en/expert_clean.srt",
+      "language": "en",
+      "format": "srt",
+      "kind": "clean",
+      "source_sha256": "e91d88b9ccdbcba611dfb509b298761121e926abc3a352f15109ed07eb1c1442",
+      "source_bytes": 2975,
+      "cues": 18,
+      "seeded_regex": [
+        {
+          "type": "DATE_TIME",
+          "value": "21.05.2026",
+          "spans": [
+            [
+              646,
+              656
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "EMAIL_ADDRESS",
+          "value": "sarah.turner@invalid.example",
+          "spans": [
+            [
+              2548,
+              2576
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "IBAN_CODE",
+          "value": "LU31 2211 3344 5566 7788",
+          "spans": [
+            [
+              2846,
+              2870
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "IP_ADDRESS",
+          "value": "192.0.2.55",
+          "spans": [
+            [
+              1228,
+              1238
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "PHONE_NUMBER",
+          "value": "+352 621 456 789",
+          "spans": [
+            [
+              2605,
+              2621
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "PROJECT_IDENTIFIER",
+          "value": "STUDY-LUX-2026-14",
+          "spans": [
+            [
+              602,
+              619
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "URL",
+          "value": "https://portal.invalid.example/engage",
+          "spans": [
+            [
+              938,
+              975
+            ]
+          ],
+          "occurrences": 1
+        }
+      ],
+      "ner_expected_best_effort": [
+        {
+          "type": "PERSON",
+          "value": "Sarah Turner",
+          "spans": [
+            [
+              164,
+              176
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "PERSON",
+          "value": "David Nunez",
+          "spans": [
+            [
+              1840,
+              1851
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "ORGANIZATION",
+          "value": "Novaform",
+          "spans": [
+            [
+              524,
+              532
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "ORGANIZATION",
+          "value": "Ariston",
+          "spans": [
+            [
+              1892,
+              1899
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "LOCATION",
+          "value": "Esch",
+          "spans": [
+            [
+              549,
+              553
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "LOCATION",
+          "value": "Dudelange",
+          "spans": [
+            [
+              1919,
+              1928
+            ]
+          ],
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "path": "en/participant_blockdemo.txt",
+      "language": "en",
+      "format": "txt",
+      "kind": "block",
+      "source_sha256": "86fe34145edc516e4d2ce42e12cfe603c1fa3516b4a70c0e993084efe78883cc",
+      "source_bytes": 976,
+      "seeded_regex": [
+        {
+          "type": "AGE",
+          "value": "97 years old",
+          "spans": [
+            [
+              145,
+              157
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "JOB_TITLE",
+          "value": "doctor",
+          "spans": [
+            [
+              127,
+              133
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "KINSHIP",
+          "value": "mother",
+          "spans": [
+            [
+              101,
+              107
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "RARE_EVENT",
+          "value": "only survivor",
+          "spans": [
+            [
+              204,
+              217
+            ]
+          ],
+          "occurrences": 1
+        },
+        {
+          "type": "SMALL_PLACE",
+          "value": "small village",
+          "spans": [
+            [
+              223,
+              236
+            ]
+          ],
+          "occurrences": 1
+        }
+      ],
+      "ner_expected_best_effort": []
+    },
+    {
+      "path": "en/safe_control.txt",
+      "language": "en",
+      "format": "txt",
+      "kind": "safe",
+      "source_sha256": "e75091bef5eabd4dc3c88b38ef95e5a6cdc67821a8710a5e9feb5c2751fb1710",
+      "source_bytes": 1022,
+      "seeded_regex": [],
+      "ner_expected_best_effort": []
+    }
+  ]
+}

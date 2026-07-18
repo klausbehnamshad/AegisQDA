@@ -1,0 +1,71 @@
+1
+00:00:01,000 --> 00:00:06,000
+I: Thanks for making the time. To start, tell us briefly what your role in the project is.
+
+2
+00:00:06,000 --> 00:00:15,000
+B: I am Sarah Turner and I have coordinated the digital participation programme since it launched. In practice, I plan the workshops and bring together the feedback we get from residents.
+
+3
+00:00:15,000 --> 00:00:21,000
+I: How is the initiative anchored institutionally, and how long has it actually been running?
+
+4
+00:00:21,000 --> 00:00:31,000
+B: It is run by the Novaform group, based in Esch, and internally we track it under the reference STUDY-LUX-2026-14. Real operations began on 21.05.2026, after a long preparation phase.
+
+5
+00:00:31,000 --> 00:00:37,000
+I: What surprised you most in the first few weeks?
+
+6
+00:00:37,000 --> 00:00:49,000
+B: Honestly, how differently people understood the point. Many assumed they would fill in a form and be done. That the platform at https://portal.invalid.example/engage was meant for real dialogue was something I had to explain again and again.
+
+7
+00:00:49,000 --> 00:00:55,000
+I: Were there technical hurdles you underestimated?
+
+8
+00:00:55,000 --> 00:01:06,000
+B: At first, sign-ups ran through a single test server at 192.0.2.55, and that was far too tight. One evening the connection dropped several times, and people's trust erodes quickly when the technology fails at exactly that moment.
+
+9
+00:01:06,000 --> 00:01:12,000
+I: How did you deal with that loss of trust?
+
+10
+00:01:12,000 --> 00:01:23,000
+B: We named it openly instead of glossing over it. That honesty helped more than any glossy brochure. Participation only holds if people feel their time is taken seriously and does not vanish into a black box.
+
+11
+00:01:23,000 --> 00:01:29,000
+I: Are you working with other partners?
+
+12
+00:01:29,000 --> 00:01:40,000
+B: Yes, David Nunez runs the in-person events for us at the Ariston cultural centre in Dudelange. Those physical meetings matter far more than we first assumed; the digital channel alone reaches nowhere near everyone.
+
+13
+00:01:40,000 --> 00:01:46,000
+I: What is the central lesson you take into the next phase?
+
+14
+00:01:46,000 --> 00:01:57,000
+B: That participation is work, not the press of a button. If you avoid the effort, you get token participation, and in the end that does more damage than doing nothing. Next time I would budget resources far earlier.
+
+15
+00:01:57,000 --> 00:02:03,000
+I: If we have follow-up questions, how can we best reach you?
+
+16
+00:02:03,000 --> 00:02:12,000
+B: Easiest by email at sarah.turner@invalid.example; by phone I am reachable on +352 621 456 789, usually in the late morning.
+
+17
+00:02:12,000 --> 00:02:18,000
+I: For the reimbursement, we would still need your bank details.
+
+18
+00:02:18,000 --> 00:02:27,000
+B: Of course, the repayment goes through the project account LU31 2211 3344 5566 7788. And please remember: participation only becomes credible once the results visibly shape the decisions.

@@ -1,0 +1,71 @@
+1
+00:00:01,000 --> 00:00:06,000
+I: Danke, dass Sie sich Zeit nehmen. Erzählen Sie zu Beginn kurz, in welcher Rolle Sie am Projekt beteiligt sind.
+
+2
+00:00:06,000 --> 00:00:14,000
+B: Ich bin Maria Berger und ich koordiniere seit dem Start das digitale Beteiligungsprogramm. Meine Aufgabe ist es, die Werkstätten zu planen und die Rückmeldungen der Leute zusammenzuführen.
+
+3
+00:00:14,000 --> 00:00:20,000
+I: Wie ist das Vorhaben organisatorisch aufgehängt, und seit wann läuft es konkret?
+
+4
+00:00:20,000 --> 00:00:30,000
+B: Getragen wird es von der Novaform-Gruppe, angesiedelt in Esch, und intern führen wir es unter der Kennung STUDY-LUX-2026-07. Der eigentliche Betrieb hat am 14.03.2026 begonnen, davor gab es eine lange Vorbereitungsphase.
+
+5
+00:00:30,000 --> 00:00:37,000
+I: Was war für Sie in den ersten Wochen die größte Überraschung?
+
+6
+00:00:37,000 --> 00:00:48,000
+B: Offen gesagt, wie unterschiedlich die Erwartungen waren. Viele Teilnehmende dachten, sie füllen ein Formular aus und sind fertig. Dass wir über die Plattform unter https://portal.invalid.example/beteiligung echten Dialog wollten, musste ich immer wieder erklären.
+
+7
+00:00:48,000 --> 00:00:54,000
+I: Gab es technische Hürden, die Sie unterschätzt haben?
+
+8
+00:00:54,000 --> 00:01:05,000
+B: Die Anmeldung lief anfangs über einen einzelnen Testserver unter 198.51.100.24, und das war zu knapp bemessen. An einem Abend im März brach uns die Verbindung mehrfach weg, und das Vertrauen der Leute leidet, wenn Technik in so einem Moment nicht trägt.
+
+9
+00:01:05,000 --> 00:01:11,000
+I: Wie sind Sie mit diesem Vertrauensverlust umgegangen?
+
+10
+00:01:11,000 --> 00:01:22,000
+B: Wir haben es offen angesprochen, statt es zu beschönigen. Diese Ehrlichkeit hat mehr geholfen als jede Hochglanzbroschüre. Beteiligung funktioniert nur, wenn die Menschen merken, dass ihre Zeit ernst genommen wird und nicht in einer Blackbox verschwindet.
+
+11
+00:01:22,000 --> 00:01:28,000
+I: Arbeiten Sie mit weiteren Partnern zusammen?
+
+12
+00:01:28,000 --> 00:01:39,000
+B: Ja, Thomas Klein betreut für uns die Veranstaltungen im Kulturzentrum Ariston in Düdelingen. Diese physischen Treffen sind wichtiger, als wir am Anfang dachten; das Digitale allein erreicht längst nicht alle.
+
+13
+00:01:39,000 --> 00:01:45,000
+I: Was nehmen Sie als zentrale Lehre für die nächste Phase mit?
+
+14
+00:01:45,000 --> 00:01:56,000
+B: Dass Beteiligung Arbeit ist und kein Knopfdruck. Wenn man den Aufwand scheut, bekommt man Alibi-Beteiligung, und die schadet am Ende mehr, als gar nichts zu tun. Ich würde beim nächsten Mal früher Ressourcen einplanen.
+
+15
+00:01:56,000 --> 00:02:02,000
+I: Falls wir Rückfragen haben, wie erreichen wir Sie am besten?
+
+16
+00:02:02,000 --> 00:02:11,000
+B: Am einfachsten per Mail an maria.berger@invalid.example, telefonisch bin ich unter +352 621 234 567 erreichbar, meist am späten Vormittag.
+
+17
+00:02:11,000 --> 00:02:18,000
+I: Für die Aufwandsentschädigung bräuchten wir noch eine Bankverbindung.
+
+18
+00:02:18,000 --> 00:02:27,000
+B: Natürlich, die Erstattung läuft über das Projektkonto mit der Nummer LU12 3456 7890 1234 5678. Und bitte denken Sie daran, dass Beteiligung erst dann glaubwürdig wird, wenn die Ergebnisse auch sichtbar in Entscheidungen einfließen.

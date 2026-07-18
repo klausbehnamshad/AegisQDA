@@ -55,7 +55,7 @@ the current endpoint/model digest before it can invoke DigQDA.
 
 ## Current measured status (2026-07-17)
 
-- model-free tests: 55 passing;
+- local test suite on the trained-model host: 69 passing;
 - curated rule-pack report: 15/15 annotated spans detected separately
   for de/fr/en/lb, with zero findings in the four safe controls;
 - de/fr/en synthetic SRT release paths pass without cue, timing, or newline

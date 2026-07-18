@@ -1,0 +1,71 @@
+1
+00:00:01,000 --> 00:00:06,000
+I: Merci de votre disponibilité. Pour commencer, dites-nous en quelques mots votre rôle dans le projet.
+
+2
+00:00:06,000 --> 00:00:15,000
+P: Je suis Camille Rousseau et je coordonne le dispositif numérique de participation depuis son lancement. Concrètement, j'organise les ateliers et je rassemble les retours des habitants.
+
+3
+00:00:15,000 --> 00:00:21,000
+I: Comment le projet est-il porté sur le plan institutionnel, et depuis quand fonctionne-t-il vraiment?
+
+4
+00:00:21,000 --> 00:00:31,000
+P: Il est porté par le groupe Novaform, installé à Esch, et en interne nous le suivons sous la référence STUDY-LUX-2026-11. L'exploitation réelle a démarré le 09.04.2026, après une longue phase de préparation.
+
+5
+00:00:31,000 --> 00:00:37,000
+I: Quelle a été votre plus grande surprise durant les premières semaines?
+
+6
+00:00:37,000 --> 00:00:49,000
+P: Franchement, l'écart entre les attentes des uns et des autres. Beaucoup pensaient remplir un formulaire et en rester là. Que la plateforme sur https://portail.invalid.example/participation vise un vrai dialogue, j'ai dû l'expliquer sans cesse.
+
+7
+00:00:49,000 --> 00:00:55,000
+I: Avez-vous sous-estimé certains obstacles techniques?
+
+8
+00:00:55,000 --> 00:01:06,000
+P: Au début, les inscriptions passaient par un seul serveur de test à l'adresse 203.0.113.45, et c'était trop juste. Un soir, la connexion a lâché plusieurs fois, et la confiance des gens s'effrite vite quand la technique ne suit pas à ce moment-là.
+
+9
+00:01:06,000 --> 00:01:12,000
+I: Comment avez-vous géré cette perte de confiance?
+
+10
+00:01:12,000 --> 00:01:23,000
+P: Nous l'avons dit ouvertement, sans enjoliver. Cette franchise a plus aidé que n'importe quelle belle brochure. La participation ne tient que si les gens sentent que leur temps compte et ne disparaît pas dans une boîte noire.
+
+11
+00:01:23,000 --> 00:01:29,000
+I: Collaborez-vous avec d'autres partenaires?
+
+12
+00:01:29,000 --> 00:01:40,000
+P: Oui, Julien Meyer s'occupe pour nous des rencontres au centre culturel Ariston à Dudelange. Ces réunions en présentiel comptent bien plus que nous l'imaginions; le numérique seul est loin de toucher tout le monde.
+
+13
+00:01:40,000 --> 00:01:46,000
+I: Quelle leçon centrale retenez-vous pour la phase suivante?
+
+14
+00:01:46,000 --> 00:01:57,000
+P: Que la participation, c'est du travail, pas un bouton sur lequel on appuie. Si l'on fuit l'effort, on obtient une participation alibi, et cela nuit finalement plus que de ne rien faire. La prochaine fois, je prévoirai des moyens plus tôt.
+
+15
+00:01:57,000 --> 00:02:03,000
+I: Si nous avons des questions, comment vous joindre au mieux?
+
+16
+00:02:03,000 --> 00:02:12,000
+P: Le plus simple, par courriel à camille.rousseau@invalid.example; par téléphone, je suis joignable au +352 621 345 678, plutôt en fin de matinée.
+
+17
+00:02:12,000 --> 00:02:18,000
+I: Pour l'indemnisation, il nous faudrait encore une coordonnée bancaire.
+
+18
+00:02:18,000 --> 00:02:28,000
+P: Bien sûr, le remboursement passe par le compte du projet LU21 0011 2233 4455 6677. Et n'oubliez pas: la participation ne devient crédible que lorsque les résultats pèsent visiblement sur les décisions.

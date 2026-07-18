@@ -15,6 +15,50 @@ from .review_signature import verify_review_signature
 from .workflow import DETECTION_FILE, LEDGER_FILE, RELEASE_FILE, REVIEW_FILE
 
 
+def _second_pass_is_consistent(second_pass: dict[str, Any]) -> bool:
+    findings = second_pass.get("findings")
+    ranges = second_pass.get("surrogate_ranges")
+    exempt_ids = second_pass.get("surrogate_exempt_finding_ids")
+    if not isinstance(findings, list) or not isinstance(ranges, list):
+        return False
+    if not isinstance(exempt_ids, list) or not all(isinstance(item, str) for item in exempt_ids):
+        return False
+    if second_pass.get("finding_count") != len(findings):
+        return False
+    if second_pass.get("surrogate_exempt_count") != len(exempt_ids):
+        return False
+    if len(set(exempt_ids)) != len(exempt_ids):
+        return False
+    validated_ranges: list[tuple[int, int]] = []
+    for bounds in ranges:
+        if (
+            not isinstance(bounds, list)
+            or len(bounds) != 2
+            or not isinstance(bounds[0], int)
+            or not isinstance(bounds[1], int)
+            or not 0 <= bounds[0] < bounds[1]
+        ):
+            return False
+        validated_ranges.append((bounds[0], bounds[1]))
+    finding_ids: set[str] = set()
+    for finding in findings:
+        if not isinstance(finding, dict):
+            return False
+        finding_id = finding.get("finding_id")
+        start, end = finding.get("start"), finding.get("end")
+        if not isinstance(finding_id, str) or not isinstance(start, int) or not isinstance(end, int):
+            return False
+        if finding_id in finding_ids:
+            return False
+        finding_ids.add(finding_id)
+        if finding_id in exempt_ids and not any(
+            range_start <= start and end <= range_end
+            for range_start, range_end in validated_ranges
+        ):
+            return False
+    return set(exempt_ids) <= finding_ids
+
+
 def validate_release(run_dir: Path) -> tuple[Path, dict[str, Any]]:
     run_dir = validate_run_dir(run_dir)
     config = load_config()
@@ -36,6 +80,7 @@ def validate_release(run_dir: Path) -> tuple[Path, dict[str, Any]]:
         signed_review = verify_review_signature(review)
     except Exception as exc:
         raise DownstreamBlocked("valid privacy release artifacts are required") from exc
+    second_pass_consistent = _second_pass_is_consistent(second_pass)
     checks = (
         release.get("state") == "PRIVACY_RELEASED",
         release.get("review_sha256") == sha256_file(run_dir / REVIEW_FILE),
@@ -64,6 +109,7 @@ def validate_release(run_dir: Path) -> tuple[Path, dict[str, Any]]:
         review.get("ledger_sha256") == sha256_file(run_dir / LEDGER_FILE),
         review.get("policy_sha256") == release.get("policy_sha256"),
         second_pass.get("schema") == "aegisqda-second-pass-v1",
+        second_pass_consistent,
         second_pass.get("unresolved_count") == 0,
         release.get("source_sha256") == detection.get("source_sha256"),
         signed_review or detection.get("synthetic_only") is True,
