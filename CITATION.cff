@@ -16,6 +16,9 @@ authors:
 repository-code: "https://github.com/klausbehnamshad/AegisQDA"
 url: "https://behnamshad.com/infrastructure.html"
 license: MIT
+version: 0.1.0
+date-released: 2026-08-08
+doi: 10.5281/zenodo.21854346
 keywords:
   - anonymisation
   - data protection
@@ -27,3 +30,4 @@ keywords:
   - research data management
   - interview data
   - oral history
+
