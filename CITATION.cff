@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "AegisQDA — local-first, fail-closed privacy gateway for qualitative data"
+abstract: >-
+  Local-only anonymisation gateway that prepares interview transcripts for
+  analysis: Presidio-backed recognition of personal data, mandatory signed
+  human review, typed document-local surrogates and a second verification
+  scan. Data is released to a downstream QDA adapter only after explicit
+  sign-off. No cloud, no telemetry, no auto-approve. German, English, French.
+type: software
+authors:
+  - family-names: "Behnam Shad"
+    given-names: "Klaus"
+    orcid: "https://orcid.org/0000-0002-3601-9024"
+    affiliation: "Luxembourg Centre for Contemporary and Digital History (C2DH), University of Luxembourg"
+repository-code: "https://github.com/klausbehnamshad/AegisQDA"
+url: "https://behnamshad.com/infrastructure.html"
+license: MIT
+keywords:
+  - anonymisation
+  - data protection
+  - GDPR
+  - privacy by design
+  - local-first
+  - human-in-the-loop
+  - qualitative data analysis
+  - research data management
+  - interview data
+  - oral history
