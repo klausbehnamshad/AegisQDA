@@ -1,5 +1,8 @@
 # AegisQDA
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21854346.svg)](https://doi.org/10.5281/zenodo.21854346)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 AegisQDA is a local-only, fail-closed privacy gateway for the pinned DigQDA
 snapshot. The implemented MVP accepts synthetic UTF-8 SRT/TXT, runs local
 Presidio-backed custom recognizers, requires complete terminal review, applies
@@ -73,3 +76,16 @@ the current endpoint/model digest before it can invoke DigQDA.
 See [synthetic acceptance](docs/SYNTHETIC_ACCEPTANCE.md),
 [compatibility evidence](docs/COMPATIBILITY_EVIDENCE.md), and the
 [next-step runbook](docs/RUNBOOK_NEXT_STEPS.md).
+
+## Citation
+
+If you use AegisQDA, please cite the archived release:
+
+> Behnam Shad, K. (2026). *AegisQDA — local-first, fail-closed privacy gateway for qualitative data* (v0.1.0). Zenodo. https://doi.org/10.5281/zenodo.21854346
+
+The DOI above is the concept DOI: it always resolves to the most recent version.
+Machine-readable metadata is in [`CITATION.cff`](CITATION.cff).
+
+## License
+
+MIT, see [`LICENSE`](LICENSE).
