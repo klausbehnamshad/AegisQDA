@@ -10,7 +10,7 @@ from aegisqda.config import Policy, load_config, load_policy
 from aegisqda.errors import BoundaryError, UnsupportedLanguage
 from aegisqda.languages import get_pack
 from aegisqda.local_boundary import reject_proxy_environment, validate_loopback_url
-from aegisqda.safeio import validate_source
+from aegisqda.safeio import is_cloud_path, validate_source
 from aegisqda.workflow import scan_source
 
 
@@ -75,6 +75,26 @@ def test_named_onedrive_path_blocks(tmp_path: Path) -> None:
     source.write_text("synthetic", encoding="utf-8")
     with pytest.raises(BoundaryError, match="cloud"):
         validate_source(source, synthetic=True)
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/Users/r/Library/CloudStorage/GoogleDrive-r@example.org/My Drive/runs", True),
+        ("/Users/r/Library/CloudStorage/OneDrive-Personal/runs", True),
+        ("/Users/r/Library/CloudStorage/Box-Box/runs", True),
+        ("/Users/r/Box Sync/runs", True),
+        ("/Volumes/GoogleDrive/My Drive/runs", True),
+        ("/Users/r/Nextcloud/runs", True),
+        ("/Users/r/ownCloud/runs", True),
+        ("/Users/r/Sandbox/runs", False),
+        ("/Users/r/inbox-export/runs", False),
+        ("/Users/r/toolbox/runs", False),
+        ("/Users/r/my drivers/runs", False),
+    ],
+)
+def test_cloud_path_markers(path: str, expected: bool) -> None:
+    assert is_cloud_path(Path(path)) is expected
 
 
 def test_repository_source_outside_fixtures_blocks() -> None:
