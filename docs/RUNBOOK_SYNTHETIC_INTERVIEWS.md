@@ -62,6 +62,13 @@ RUN=/private/tmp/aegisqda-runs/SYNTH-DE-CLEAN/run-XXXXXX
 For the block-demo, `review` offers only `[f]`/`[a]` on the indirect identifiers;
 the correct action is abort. For the safe control, `review` shows no findings.
 
+After the findings, `review` asks whether to add a missed detection. Type the
+exact missed text and every occurrence inside a content line is added (spans an
+already confirmed finding covers are skipped); leave it empty to enter raw
+character offsets instead. An unknown entity type is asked again; a type the
+policy blocks aborts the review. End of input or Ctrl-C aborts without writing
+a review.
+
 Optional local signing: `keygen-review /secure/reviewer.pem` once, then
 `review … --signing-key /secure/reviewer.pem`. (Note: the signature currently
 proves self-consistency only; the trust-store allowlist is not yet enforced — see

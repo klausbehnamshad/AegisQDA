@@ -6,9 +6,15 @@ from pathlib import Path
 import pytest
 
 from aegisqda.config import load_config, load_policy
-from aegisqda.detection import scan_document
-from aegisqda.errors import IntegrityError
-from aegisqda.formats.document import fingerprint_text, parse_document
+from aegisqda.detection import MAX_SCAN_CHARS, scan_document
+from aegisqda.errors import BoundaryError, IntegrityError
+from aegisqda.formats.document import (
+    Document,
+    Region,
+    fingerprint_text,
+    parse_document,
+    parse_document_bytes,
+)
 
 
 @pytest.mark.parametrize("language", ["de", "fr", "en", "lb"])
@@ -102,3 +108,30 @@ def test_title_based_person_variants(
         if finding.entity_type == "PERSON"
     }
     assert expected in values
+
+
+def test_srt_byte_order_mark_is_not_part_of_the_first_cue() -> None:
+    raw = "\ufeff1\n00:00:01,000 --> 00:00:02,000\nHello there.\n".encode()
+    document = parse_document_bytes(raw, ".srt")
+    assert document.text.startswith("1\n")
+    assert document.fingerprint["cue_count"] == 1
+
+
+@pytest.mark.parametrize(
+    "srt",
+    [
+        "\u00b2\n00:00:01,000 --> 00:00:02,000\nHello.\n",
+        "\u0661\n00:00:01,000 --> 00:00:02,000\nHello.\n",
+        "1\n\u0660\u0660:00:01,000 --> 00:00:02,000\nHello.\n",
+    ],
+)
+def test_srt_numbers_must_be_ascii_digits(srt: str) -> None:
+    with pytest.raises(IntegrityError, match="malformed SRT"):
+        parse_document_bytes(srt.encode(), ".srt")
+
+
+def test_detector_length_bound_blocks_with_clear_message() -> None:
+    text = "a" * (MAX_SCAN_CHARS + 1)
+    document = Document("txt", text, (Region(0, len(text)),), {})
+    with pytest.raises(BoundaryError, match="character local detector bound"):
+        scan_document(document, "en", load_policy(load_config()))

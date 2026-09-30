@@ -12,7 +12,7 @@ from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig, RecognizerResult
 
 from .config import AppConfig, Policy, PolicyAction, ROOT, load_config, load_policy
-from .detection import Finding, detector_versions, scan_document
+from .detection import DETECTED_ENTITY_TYPES, Finding, detector_versions, scan_document
 from .errors import IntegrityError, ReviewRequired
 from .formats.document import Document, fingerprint_text, parse_document, parse_document_bytes
 from .languages import get_pack
@@ -141,11 +141,66 @@ def _context(text: str, start: int, end: int, radius: int = 45) -> str:
     return text[max(0, start - radius):min(len(text), end + radius)].replace("\r", " ").replace("\n", " ↵ ")
 
 
+def _ask(prompt: str) -> str:
+    """Read one answer; end of input or Ctrl-C aborts without writing a review."""
+    try:
+        return input(prompt)
+    except (EOFError, KeyboardInterrupt) as exc:
+        raise ReviewRequired("review aborted; no review artifact was written") from exc
+
+
+def _inside_content_line(document: Document, start: int, end: int) -> bool:
+    return any(region.start <= start and end <= region.end for region in document.regions)
+
+
+def _occurrences(document: Document, needle: str) -> list[tuple[int, int]]:
+    """Non-overlapping occurrences of needle that lie inside one content line."""
+    spans: list[tuple[int, int]] = []
+    start = document.text.find(needle)
+    while start != -1:
+        end = start + len(needle)
+        if _inside_content_line(document, start, end):
+            spans.append((start, end))
+            start = document.text.find(needle, end)
+        else:
+            start = document.text.find(needle, start + 1)
+    return spans
+
+
+def _ask_missed_spans(document: Document) -> list[tuple[int, int]]:
+    needle = _ask("exact missed text (adds every single-line occurrence; empty = offsets): ").strip()
+    if needle:
+        spans = _occurrences(document, needle)
+        if not spans:
+            print("text not found inside a content line; nothing added")
+        return spans
+    try:
+        start = int(_ask("start offset: "))
+        end = int(_ask("end offset: "))
+    except ValueError:
+        print("invalid offset; nothing added")
+        return []
+    if not (0 <= start < end <= len(document.text)) or not _inside_content_line(document, start, end):
+        print("offsets must select a span inside one content line; nothing added")
+        return []
+    return [(start, end)]
+
+
+def _ask_entity_type(policy: Policy) -> str:
+    known = set(policy.entities) | DETECTED_ENTITY_TYPES
+    while True:
+        entity_type = _ask("entity type (for example PERSON): ").strip().upper()
+        if entity_type in known:
+            return entity_type
+        print("unknown entity type; known types: " + ", ".join(sorted(known)))
+
+
 def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None = None) -> Path:
     """Deliberately reveal local protected context and collect complete decisions."""
     validate_opaque_id(reviewer_id, label="reviewer id")
     detection, ledger, document, config, policy = _load_detection(run_dir)
     decisions: list[dict[str, str]] = []
+    covered: list[tuple[int, int]] = []
     findings = ledger.get("findings")
     if not isinstance(findings, list):
         raise IntegrityError("detection ledger findings are invalid")
@@ -169,13 +224,13 @@ def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None
             allowed_answers.add("g")
             prompt = "confirm generalization [g], false positive [f], abort [a]: "
         while True:
-            answer = input(prompt).strip().casefold()
+            answer = _ask(prompt).strip().casefold()
             if answer in allowed_answers:
                 break
         if answer == "a":
             raise ReviewRequired("review aborted; no review artifact was written")
         if answer == "f":
-            rationale = input("false-positive rationale (required): ").strip()
+            rationale = _ask("false-positive rationale (required): ").strip()
             if len(rationale) < 8:
                 raise ReviewRequired("false-positive rationale is too short; review was not written")
             decisions.append(
@@ -184,16 +239,13 @@ def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None
         else:
             decision = "CONFIRMED" if answer == "c" else "GENERALIZE_CONFIRMED"
             decisions.append({"finding_id": finding_id, "decision": decision})
+            covered.append((start, end))
     additions: list[dict[str, object]] = []
-    while input("add a missed detection? [y/N]: ").strip().casefold() == "y":
-        try:
-            start = int(input("start offset: "))
-            end = int(input("end offset: "))
-        except ValueError as exc:
-            raise ReviewRequired("invalid added-detection offset; review was not written") from exc
-        entity_type = input("entity type (for example PERSON): ").strip().upper()
-        if not (0 <= start < end <= len(document.text)) or "\n" in document.text[start:end]:
-            raise ReviewRequired("added detection must be a valid single-line source span")
+    while _ask("add a missed detection? [y/N]: ").strip().casefold() == "y":
+        spans = _ask_missed_spans(document)
+        if not spans:
+            continue
+        entity_type = _ask_entity_type(policy)
         action = policy.action_for(entity_type)
         if action is PolicyAction.REPLACE_AND_REVIEW:
             resolution = "CONFIRMED"
@@ -201,17 +253,25 @@ def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None
             resolution = "GENERALIZE_CONFIRMED"
         else:
             raise ReviewRequired("added detection is blocking under the current policy")
-        additions.append(
-            {
-                "finding_id": f"A-{len(additions) + 1:04d}",
-                "entity_type": entity_type,
-                "start": start,
-                "end": end,
-                "value_sha256": sha256_bytes(document.text[start:end].encode()),
-                "action": action.value,
-                "decision": resolution,
-            }
-        )
+        new_spans = [
+            (start, end)
+            for start, end in spans
+            if not any(left <= start and end <= right for left, right in covered)
+        ]
+        for start, end in new_spans:
+            additions.append(
+                {
+                    "finding_id": f"A-{len(additions) + 1:04d}",
+                    "entity_type": entity_type,
+                    "start": start,
+                    "end": end,
+                    "value_sha256": sha256_bytes(document.text[start:end].encode()),
+                    "action": action.value,
+                    "decision": resolution,
+                }
+            )
+            covered.append((start, end))
+        print(f"added {len(new_spans)} span(s); {len(spans) - len(new_spans)} already covered")
     return write_review(run_dir, reviewer_id, decisions, additions, signing_key=signing_key)
 
 

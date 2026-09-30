@@ -18,6 +18,7 @@ from presidio_analyzer.nlp_engine import NlpArtifacts, NlpEngine
 from presidio_analyzer.predefined_recognizers import SpacyRecognizer
 
 from .config import Policy
+from .errors import BoundaryError
 from .formats.document import Document, Region
 from .manifests import sha256_bytes
 from .languages import PACKS
@@ -65,6 +66,11 @@ TRANSCRIPT_ROLE_MARKERS = {"I", "P"}
 # the English model labels the literal word "IBAN" as ORGANIZATION). Suppress
 # only when the cue directly introduces a detected structured value.
 STRUCTURED_FIELD_CUES = {"IBAN": "IBAN_CODE"}
+
+SCORE_THRESHOLD = 0.5
+# spaCy refuses longer texts (Language.max_length, error E088); fail with a
+# clear boundary message instead of an unexplained processing failure.
+MAX_SCAN_CHARS = 1_000_000
 
 # Exact shape of a surrogate emitted by transform_run, e.g. [PERSON_001]. Only
 # this shape is skipped: a blanket bracket exemption would also hide real
@@ -212,6 +218,12 @@ LANGUAGE_PATTERNS: dict[str, dict[str, list[tuple[str, str, float]]]] = {
     },
 }
 
+# Every entity type a recognizer can emit, including indirect identifiers such
+# as AGE or KINSHIP that the policy leaves at its default BLOCK action.
+DETECTED_ENTITY_TYPES = frozenset(COMMON_PATTERNS) | NER_ENTITY_TYPES | {
+    entity for patterns in LANGUAGE_PATTERNS.values() for entity in patterns
+}
+
 
 @lru_cache(maxsize=4)
 def _engine(language: str) -> AnalyzerEngine:
@@ -255,7 +267,7 @@ def detector_versions(language: str) -> dict[str, object]:
         "spacy": importlib.metadata.version("spacy"),
         "nlp_strategy": installed_model or f"spacy.blank:{language}",
         "ner_model": installed_model,
-        "threshold": 0.5,
+        "threshold": SCORE_THRESHOLD,
         "recognizer_pack": "aegis-custom-strict-v3",
     }
 
@@ -275,10 +287,12 @@ def _region_pieces(
 
 
 def scan_document(document: Document, language: str, policy: Policy) -> list[Finding]:
+    if len(document.text) > MAX_SCAN_CHARS:
+        raise BoundaryError("document exceeds the 1,000,000-character local detector bound")
     results = _engine(language).analyze(
         text=document.text,
         language=language,
-        score_threshold=0.5,
+        score_threshold=SCORE_THRESHOLD,
         return_decision_process=False,
     )
     # A span that crosses a line break (e.g. a name wrapped inside an SRT cue)

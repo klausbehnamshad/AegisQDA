@@ -13,7 +13,7 @@ from aegisqda.manifests import sha256_bytes
 from aegisqda.privacy_gate import validate_release
 from aegisqda.review_signature import create_review_key
 from aegisqda.safeio import load_json
-from aegisqda.workflow import scan_source, transform_run, write_review
+from aegisqda.workflow import interactive_review, scan_source, transform_run, write_review
 
 
 def _approve_all(run_dir: Path, reviewer: str = "REVIEWER-001") -> None:
@@ -289,3 +289,93 @@ def test_signed_review_is_verified(fixture_root: Path, tmp_path: Path) -> None:
     transform_run(run_dir)
     _, release = validate_release(run_dir)
     assert release["review_assurance"] == "SELF_SIGNED_LOCAL"
+
+
+def _scripted_review(
+    monkeypatch: pytest.MonkeyPatch, replies: dict[str, list[str]]
+) -> list[str]:
+    """Answer review prompts by prefix; each prefix pops its replies in order."""
+    asked: list[str] = []
+
+    def answer(prompt: str = "") -> str:
+        asked.append(prompt)
+        if prompt.startswith("confirm replacement"):
+            return "c"
+        if prompt.startswith("confirm generalization"):
+            return "g"
+        if prompt.startswith("false positive [f]"):
+            return "f"
+        if prompt.startswith("false-positive rationale"):
+            return "synthetic fixture wording"
+        for prefix, queue in replies.items():
+            if prompt.startswith(prefix):
+                if not queue:
+                    raise EOFError
+                return queue.pop(0)
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", answer)
+    return asked
+
+
+def _nickname_run(tmp_path: Path, case_id: str) -> Path:
+    source = tmp_path / "nickname.txt"
+    source.write_text(
+        "Contact person@invalid.example today.\nEveryone calls her zebrafinch.\n"
+        "Later zebrafinch agreed.\n",
+        encoding="utf-8",
+    )
+    return scan_source(
+        source, language="en", case_id=case_id, run_root=tmp_path / "runs", synthetic=True
+    )
+
+
+def test_review_end_of_input_aborts_without_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_dir = _nickname_run(tmp_path, "CASE-EOF")
+    _scripted_review(monkeypatch, {})
+    with pytest.raises(ReviewRequired, match="aborted"):
+        interactive_review(run_dir, "REVIEWER-001")
+    assert not (run_dir / "review.json").exists()
+
+
+def test_review_adds_missed_text_and_reprompts_unknown_type(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_dir = _nickname_run(tmp_path, "CASE-ADD-TEXT")
+    asked = _scripted_review(
+        monkeypatch,
+        {
+            "add a missed detection": ["y", "y", "n"],
+            "exact missed text": ["zebrafinch", "person@invalid.example"],
+            "entity type": ["PERSN", "PERSON", "EMAIL_ADDRESS"],
+        },
+    )
+    interactive_review(run_dir, "REVIEWER-001")
+    assert sum(prompt.startswith("entity type") for prompt in asked) == 3
+    review = load_json(run_dir / "review.json")
+    text = (run_dir / "source.txt").read_text(encoding="utf-8")
+    added = [text[item["start"]:item["end"]] for item in review["additions"]]
+    assert "person@invalid.example" not in added  # already a confirmed finding
+    transform_run(run_dir)
+    transformed = (run_dir / "transformed.txt").read_text(encoding="utf-8")
+    assert "zebrafinch" not in transformed
+    assert "person@invalid.example" not in transformed
+
+
+def test_review_missed_blocking_type_still_aborts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_dir = _nickname_run(tmp_path, "CASE-ADD-BLOCK")
+    _scripted_review(
+        monkeypatch,
+        {
+            "add a missed detection": ["y"],
+            "exact missed text": ["zebrafinch"],
+            "entity type": ["KINSHIP"],
+        },
+    )
+    with pytest.raises(ReviewRequired, match="blocking"):
+        interactive_review(run_dir, "REVIEWER-001")
+    assert not (run_dir / "review.json").exists()

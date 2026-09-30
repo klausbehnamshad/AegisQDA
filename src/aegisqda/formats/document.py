@@ -9,8 +9,11 @@ from pathlib import Path
 
 from aegisqda.errors import IntegrityError
 
+# ASCII only: str.isdigit() and \d also accept digits such as "²" or "١".
+CUE_RE = re.compile(r"[0-9]+")
 TIMING_RE = re.compile(
-    r"^(?P<start>\d{2}:\d{2}:\d{2},\d{3}) --> (?P<end>\d{2}:\d{2}:\d{2},\d{3})$"
+    r"^(?P<start>\d{2}:\d{2}:\d{2},\d{3}) --> (?P<end>\d{2}:\d{2}:\d{2},\d{3})$",
+    re.ASCII,
 )
 
 
@@ -61,7 +64,7 @@ def _parse_srt(text: str) -> Document:
         if index >= len(lines):
             break
         cue = lines[index][2]
-        if not cue.isdigit() or int(cue) != expected_cue:
+        if not CUE_RE.fullmatch(cue) or int(cue) != expected_cue:
             raise IntegrityError("malformed SRT cue sequence")
         index += 1
         if index >= len(lines) or not TIMING_RE.fullmatch(lines[index][2]):
@@ -118,7 +121,9 @@ def _parse_txt(text: str) -> Document:
 
 def parse_document_bytes(raw: bytes, suffix: str) -> Document:
     try:
-        text = raw.decode("utf-8")
+        # utf-8-sig drops a leading byte-order mark, which many subtitle tools
+        # write; it is not content and would otherwise break the first cue.
+        text = raw.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
         raise IntegrityError("source must be readable UTF-8") from exc
     if "\x00" in text:
