@@ -11,7 +11,7 @@ from typing import Any
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig, RecognizerResult
 
-from .config import AppConfig, Policy, PolicyAction, ROOT, load_config, load_policy
+from .config import DEFAULT_CONFIG, AppConfig, Policy, PolicyAction, ROOT, load_config, load_policy
 from .detection import DETECTED_ENTITY_TYPES, Finding, detector_versions, scan_document
 from .errors import IntegrityError, ReviewRequired
 from .formats.document import Document, fingerprint_text, parse_document, parse_document_bytes
@@ -45,13 +45,14 @@ def _policy_hash(config: AppConfig) -> str:
 
 
 def _config_hash() -> str:
-    return sha256_file((ROOT / "config" / "aegisqda.local.yaml").resolve())
+    return sha256_file(DEFAULT_CONFIG)
 
 
-def _preflight(config: AppConfig) -> None:
+def _preflight(config: AppConfig) -> str:
+    """Check the local boundary and return the verified upstream snapshot hash."""
     reject_proxy_environment()
     validate_loopback_url(config.execution.ollama_base_url)
-    verify_upstream(config)
+    return verify_upstream(config)
 
 
 def scan_source(
@@ -65,7 +66,7 @@ def scan_source(
     """Create a protected run and stop in REVIEW_REQUIRED state."""
     config = load_config()
     policy = load_policy(config)
-    _preflight(config)  # Deliberately before source validation/read.
+    upstream_sha256 = _preflight(config)  # Deliberately before source validation/read.
     get_pack(language)
     validate_opaque_id(case_id, label="case id")
     source = validate_source(source_path, synthetic=synthetic)
@@ -101,7 +102,7 @@ def scan_source(
             "config_sha256": _config_hash(),
             "detector": detector_versions(language),
             "endpoint": config.execution.ollama_base_url,
-            "upstream_sha256": verify_upstream(config),
+            "upstream_sha256": upstream_sha256,
         }
     )
     atomic_json(run_dir / DETECTION_FILE, manifest)

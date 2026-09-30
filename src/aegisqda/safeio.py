@@ -138,8 +138,11 @@ def fresh_run_dir(root: Path, case_id: str) -> Path:
     return Path(tempfile.mkdtemp(prefix="run-", dir=case_dir)).resolve()
 
 
-def atomic_write(path: Path, data: bytes) -> None:
-    secure_dir(path.parent)
+def atomic_write(path: Path, data: bytes, *, secure_parent: bool = True) -> None:
+    if secure_parent:
+        secure_dir(path.parent)
+    elif not resolved_no_symlink(path.parent).is_dir():
+        raise BoundaryError("protected directory is not a directory")
     if path.exists() or path.is_symlink():
         raise IntegrityError("protected artifact already exists")
     fd, temporary = tempfile.mkstemp(prefix=".aegis-", dir=path.parent)

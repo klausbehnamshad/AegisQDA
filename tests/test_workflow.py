@@ -271,6 +271,16 @@ def test_false_positive_requires_rationale(tmp_path: Path) -> None:
         )
 
 
+def test_review_keygen_keeps_existing_directory_permissions(tmp_path: Path) -> None:
+    key_dir = tmp_path / "keys"
+    key_dir.mkdir()
+    os.chmod(key_dir, 0o750)
+    private, public, _ = create_review_key(key_dir / "reviewer.pem")
+    assert stat.S_IMODE(key_dir.stat().st_mode) == 0o750
+    assert stat.S_IMODE(private.stat().st_mode) == 0o600
+    assert public.is_file()
+
+
 def test_signed_review_is_verified(fixture_root: Path, tmp_path: Path) -> None:
     key, _, _ = create_review_key(tmp_path / "review-key.pem")
     run_dir = scan_source(

@@ -49,8 +49,12 @@ def create_review_key(path: Path) -> tuple[Path, Path, str]:
         serialization.PublicFormat.Raw,
     )
     public_path = private_path.with_suffix(private_path.suffix + ".pub")
-    atomic_write(private_path, private_bytes)
-    atomic_write(public_path, base64.b64encode(public_bytes) + b"\n")
+    # The key file itself is 0600. An existing directory (possibly the home
+    # directory) keeps its permissions; only a missing one is created 0700.
+    if not private_path.parent.exists():
+        private_path.parent.mkdir(mode=0o700, parents=True)
+    atomic_write(private_path, private_bytes, secure_parent=False)
+    atomic_write(public_path, base64.b64encode(public_bytes) + b"\n", secure_parent=False)
     return private_path, public_path, sha256_bytes(public_bytes)
 
 
