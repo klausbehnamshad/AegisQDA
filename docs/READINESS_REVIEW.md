@@ -124,6 +124,17 @@ split-line mentions, indirect-identifier combinations) and track recall over tim
 alongside `scripts/synthetic_acceptance.py`. Treat red as information, not
 failure.
 
+Update 2026-09-30: split-line mentions were a real leak, not only a gap in the
+suite. With the pinned de/fr/en models, NER returns a name wrapped inside an
+SRT cue (`Anna\nSchneider`) as one entity; `scan_document` dropped every span
+that did not fit into a single content line, so such names reached
+`PRIVACY_RELEASED` unreviewed. The same happened to spans crossing U+2028 and
+to bracketed values (`[Jane Example]`), which a blanket bracket skip in the
+detector hid. Spans are now split into per-line pieces, only exact surrogate
+shapes are skipped, other Unicode line separators are rejected at parse time,
+and `recognizer_pack` is `aegis-custom-strict-v3`. Regression tests pin all
+three cases.
+
 ## F4 (Medium) — Post-DigQDA output scan hard-codes the analytical-prose language
 
 `digqda_adapter._scan_outputs` scans generated analytical prose as German and

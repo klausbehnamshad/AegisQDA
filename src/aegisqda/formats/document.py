@@ -123,6 +123,8 @@ def parse_document_bytes(raw: bytes, suffix: str) -> Document:
         raise IntegrityError("source must be readable UTF-8") from exc
     if "\x00" in text:
         raise IntegrityError("NUL bytes are forbidden")
+    if any(char in text for char in "\v\f\x1c\x1d\x1e\x85\u2028\u2029"):
+        raise IntegrityError("Unicode line separators other than LF/CRLF are unsupported")
     if suffix.lower() == ".srt":
         return _parse_srt(text)
     if suffix.lower() == ".txt":

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.metadata
 import importlib.util
 import re
+from bisect import bisect_right
 from dataclasses import asdict, dataclass
 from functools import lru_cache
 from typing import Iterable, Iterator
@@ -63,6 +65,11 @@ TRANSCRIPT_ROLE_MARKERS = {"I", "P"}
 # the English model labels the literal word "IBAN" as ORGANIZATION). Suppress
 # only when the cue directly introduces a detected structured value.
 STRUCTURED_FIELD_CUES = {"IBAN": "IBAN_CODE"}
+
+# Exact shape of a surrogate emitted by transform_run, e.g. [PERSON_001]. Only
+# this shape is skipped: a blanket bracket exemption would also hide real
+# bracketed content such as "[Jane Example]".
+SURROGATE_RE = re.compile(r"\[[A-Z][A-Z0-9_]*_\d{3,}\]")
 
 
 @dataclass(frozen=True)
@@ -249,12 +256,22 @@ def detector_versions(language: str) -> dict[str, object]:
         "nlp_strategy": installed_model or f"spacy.blank:{language}",
         "ner_model": installed_model,
         "threshold": 0.5,
-        "recognizer_pack": "aegis-custom-strict-v2",
+        "recognizer_pack": "aegis-custom-strict-v3",
     }
 
 
-def _inside_regions(start: int, end: int, regions: tuple[Region, ...]) -> bool:
-    return any(start >= region.start and end <= region.end for region in regions)
+def _region_pieces(
+    start: int, end: int, regions: tuple[Region, ...], starts: list[int]
+) -> list[tuple[int, int]]:
+    """Clip a span to the content regions it overlaps instead of dropping it."""
+    pieces: list[tuple[int, int]] = []
+    for region in regions[max(bisect_right(starts, start) - 1, 0):]:
+        if region.start >= end:
+            break
+        piece_start, piece_end = max(start, region.start), min(end, region.end)
+        if piece_start < piece_end:
+            pieces.append((piece_start, piece_end))
+    return pieces
 
 
 def scan_document(document: Document, language: str, policy: Policy) -> list[Finding]:
@@ -264,7 +281,15 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
         score_threshold=0.5,
         return_decision_process=False,
     )
-    candidates = [item for item in results if _inside_regions(item.start, item.end, document.regions)]
+    # A span that crosses a line break (e.g. a name wrapped inside an SRT cue)
+    # is split into per-line pieces; dropping it would silently hide it.
+    starts = [region.start for region in document.regions]
+    candidates = []
+    for item in results:
+        for piece_start, piece_end in _region_pieces(item.start, item.end, document.regions, starts):
+            piece = copy.copy(item)
+            piece.start, piece.end = piece_start, piece_end
+            candidates.append(piece)
     candidates.sort(key=lambda item: (item.start, -(item.end - item.start), item.entity_type))
     strong_candidates = [item for item in candidates if item.entity_type in STRONG_STRUCTURED_TYPES]
     contextual_candidates = [
@@ -277,7 +302,7 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
     findings: list[Finding] = []
     seen_exact: set[tuple[int, int, str]] = set()
     for item in candidates:
-        if document.text[item.start:item.end].startswith("[") and document.text[item.start:item.end].endswith("]"):
+        if SURROGATE_RE.fullmatch(document.text[item.start:item.end]):
             continue
         recognizer = str(item.recognition_metadata.get("recognizer_name", ""))
         is_spacy_ner = item.entity_type in NER_ENTITY_TYPES and recognizer.endswith("spaCy-NER")

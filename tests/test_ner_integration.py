@@ -19,8 +19,8 @@ import aegisqda.detection as det
 import aegisqda.workflow as wf
 from aegisqda.config import load_config, load_policy
 from aegisqda.detection import Finding, scan_document
-from aegisqda.errors import ReviewRequired
-from aegisqda.formats.document import Document, Region
+from aegisqda.errors import IntegrityError, ReviewRequired
+from aegisqda.formats.document import Document, Region, parse_document_bytes
 from aegisqda.manifests import sha256_bytes
 from aegisqda.workflow import LEDGER_FILE, scan_source, transform_run, write_review
 from aegisqda.safeio import load_json
@@ -224,3 +224,26 @@ def test_second_pass_does_not_exempt_finding_crossing_surrogate_boundary(
     monkeypatch.setattr(wf, "scan_document", crossing)
     with pytest.raises(ReviewRequired, match="second-pass"):
         transform_run(run_dir)
+
+
+def test_ner_span_across_srt_line_wrap_is_split_not_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _sim_model(monkeypatch, "en", [
+        {"label": "PERSON", "pattern": [{"TEXT": "Maria"}, {"IS_SPACE": True}, {"TEXT": "Gonzalez"}]},
+    ])
+    srt = "1\n00:00:01,000 --> 00:00:04,000\nYesterday I interviewed Maria\nGonzalez about it.\n"
+    document = parse_document_bytes(srt.encode(), ".srt")
+    got = {(f.entity_type, srt[f.start:f.end]) for f in scan_document(document, "en", _policy())}
+    assert got == {("PERSON", "Maria"), ("PERSON", "Gonzalez")}
+
+
+def test_bracketed_value_is_not_exempt_unless_surrogate_shaped() -> None:
+    text = "My name is [Jane Example] and I live in Springfield."
+    got = {(f.entity_type, text[f.start:f.end]) for f in scan_document(_doc(text), "en", _policy())}
+    assert ("PERSON", "[Jane Example]") in got
+
+
+def test_unicode_line_separators_are_rejected() -> None:
+    with pytest.raises(IntegrityError, match="line separators"):
+        parse_document_bytes("My name is Jane Example.\n".encode(), ".txt")
