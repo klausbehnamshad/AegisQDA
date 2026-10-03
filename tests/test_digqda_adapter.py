@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aegisqda.digqda_adapter import _scan_outputs, _validate_digqda_contract
+from aegisqda.digqda_adapter import PINNED_OPEN_HASHES, _scan_outputs, _validate_digqda_contract
 from aegisqda.manifests import canonical_bytes, sha256_bytes
 
 
@@ -42,10 +42,7 @@ def test_complete_digqda_contract_is_accepted() -> None:
         "n_units": 1,
         "n_ok": 1,
         "statuses": [{"status": "OK"}],
-        "contract_sha256": "c" * 64,
-        "prompt_sha256": "d" * 64,
-        "schema_sha256": "e" * 64,
-        "grammar_sha256": "f" * 64,
+        **PINNED_OPEN_HASHES,
     }
     coding: dict[str, object] = {"_qda_run": manifest, "results": []}
     validation: dict[str, object] = {

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Adapter-owned read-only inventory entry point; never call the native CLI.
+exec "${AEGISQDA_RUNTIME_PYTHON:?}" "${AEGISQDA_INVENTORY_PROBE:?}" "$@"

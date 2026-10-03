@@ -1,0 +1,138 @@
+{
+  "schema": "aegisqda-synthetic-source-registry-v1",
+  "scope": "hand-authored synthetic fixtures only; no real-data authorization",
+  "files": [
+    {
+      "path": "tests/fixtures/de/risk.txt",
+      "language": "de",
+      "source_sha256": "e35cac2b107e6b584393d78d7a79c8bca75e026cf625a9bdcccbb5fcbe3511cb",
+      "source_bytes": 346
+    },
+    {
+      "path": "tests/fixtures/de/safe.txt",
+      "language": "de",
+      "source_sha256": "8a0c6143b6bfe1c790cf859a6e82a497e241868baa67718779c564c89c37ba4a",
+      "source_bytes": 67
+    },
+    {
+      "path": "tests/fixtures/de/sample.srt",
+      "language": "de",
+      "source_sha256": "f6f61da17b37ffb83ac4d4b680164ecf02c6ec9a52265357040592e332ae5594",
+      "source_bytes": 122
+    },
+    {
+      "path": "tests/fixtures/en/qualification.srt",
+      "language": "en",
+      "source_sha256": "2d336ce8485d69f58c927125f3f6ca7ed681db824784a9c171b589b123cf3713",
+      "source_bytes": 190
+    },
+    {
+      "path": "tests/fixtures/en/risk.txt",
+      "language": "en",
+      "source_sha256": "fdd14a328e40357a96ccbe65b5ecba6cabbb8aefafaf36586fd745fd8cc05d19",
+      "source_bytes": 332
+    },
+    {
+      "path": "tests/fixtures/en/safe.txt",
+      "language": "en",
+      "source_sha256": "9f58d15459754c11edc1d6661c13011313e7b5bd1d53cbb7a3c40553af9145d0",
+      "source_bytes": 52
+    },
+    {
+      "path": "tests/fixtures/en/sample.srt",
+      "language": "en",
+      "source_sha256": "443e3fcfa4cff0589c99fb823376e94074f18be336b6685a4fdc334b65c2b573",
+      "source_bytes": 117
+    },
+    {
+      "path": "tests/fixtures/fr/risk.txt",
+      "language": "fr",
+      "source_sha256": "34f176a5381ed97cd8139f7ad9b8d412665264496433503fdbced7d045e92015",
+      "source_bytes": 350
+    },
+    {
+      "path": "tests/fixtures/fr/safe.txt",
+      "language": "fr",
+      "source_sha256": "af5c011f5fe5b8e0da59a63380cab9fd98c42899b06f0647e245e3a7ab01ac2d",
+      "source_bytes": 61
+    },
+    {
+      "path": "tests/fixtures/fr/sample.srt",
+      "language": "fr",
+      "source_sha256": "958e16256768b45b9574681aa2dfdcabf616d533622f752581d592e7c8fa1536",
+      "source_bytes": 128
+    },
+    {
+      "path": "tests/fixtures/interviews/de/expert_clean.srt",
+      "language": "de",
+      "source_sha256": "31938aa8eb7ba83c5255e73593deed22e94524e975b6439f8e0a821d854f5730",
+      "source_bytes": 3277
+    },
+    {
+      "path": "tests/fixtures/interviews/de/participant_blockdemo.txt",
+      "language": "de",
+      "source_sha256": "841b331bc99fa6e27ce46f6bd55e20bf146dea5da11d033bec51afa3f41584ff",
+      "source_bytes": 1070
+    },
+    {
+      "path": "tests/fixtures/interviews/de/safe_control.txt",
+      "language": "de",
+      "source_sha256": "81df3c422f44352a6932fe6e0990aa1ac1403826090000ea83f6da2c8664a597",
+      "source_bytes": 1102
+    },
+    {
+      "path": "tests/fixtures/interviews/en/expert_clean.srt",
+      "language": "en",
+      "source_sha256": "e91d88b9ccdbcba611dfb509b298761121e926abc3a352f15109ed07eb1c1442",
+      "source_bytes": 2975
+    },
+    {
+      "path": "tests/fixtures/interviews/en/participant_blockdemo.txt",
+      "language": "en",
+      "source_sha256": "86fe34145edc516e4d2ce42e12cfe603c1fa3516b4a70c0e993084efe78883cc",
+      "source_bytes": 976
+    },
+    {
+      "path": "tests/fixtures/interviews/en/safe_control.txt",
+      "language": "en",
+      "source_sha256": "e75091bef5eabd4dc3c88b38ef95e5a6cdc67821a8710a5e9feb5c2751fb1710",
+      "source_bytes": 1022
+    },
+    {
+      "path": "tests/fixtures/interviews/fr/expert_clean.srt",
+      "language": "fr",
+      "source_sha256": "db0308f63e5ead5e70296dfce7459574da65291be6c7ab8a67cee37344b502d2",
+      "source_bytes": 3224
+    },
+    {
+      "path": "tests/fixtures/interviews/fr/participant_blockdemo.txt",
+      "language": "fr",
+      "source_sha256": "4cde306429ba0bf7fedf03c72a493578feda7b3eb1cb34364b7f51ef636f8149",
+      "source_bytes": 1054
+    },
+    {
+      "path": "tests/fixtures/interviews/fr/safe_control.txt",
+      "language": "fr",
+      "source_sha256": "2a8812772ca9781d1a31145cfaa75024b11753e465bf1b34b27f3f8f74837acb",
+      "source_bytes": 1191
+    },
+    {
+      "path": "tests/fixtures/lb/risk.txt",
+      "language": "lb",
+      "source_sha256": "a0e06ab7e696ce86311bbc0f34c68e5845d3aa6219d307fdcc1b0175f0f4516f",
+      "source_bytes": 346
+    },
+    {
+      "path": "tests/fixtures/lb/safe.txt",
+      "language": "lb",
+      "source_sha256": "87ec3a6c2b23dde0d6c0b881d0ea6956e1a8c11c28f14415af96cebd48aed93a",
+      "source_bytes": 77
+    },
+    {
+      "path": "tests/fixtures/lb/sample.srt",
+      "language": "lb",
+      "source_sha256": "47b9794760c40920998459a2261c644d9af2da7a2d243d10e963cf71ea7dbf33",
+      "source_bytes": 122
+    }
+  ]
+}

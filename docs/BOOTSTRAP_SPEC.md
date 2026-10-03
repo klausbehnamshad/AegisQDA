@@ -1,16 +1,16 @@
-# Megaprompt — build the AegisQDA local CLI MVP
+# Historical implementation specification — AegisQDA local CLI MVP
 
 > Historical bootstrap specification. Its `gemma4:12b` model decision was
 > superseded on 2026-07-17 after the full structured-output smoke rejected that
 > model. Current operational truth lives in `config/aegisqda.local.yaml` and
 > `docs/COMPATIBILITY_EVIDENCE.md`.
 
-Copy everything below into a fresh Codex context whose workspace is
+This historical implementation specification applies to the workspace
 `/Users/klaus.behnamshad/Projects/AegisQDA`.
 
 ---
 
-You are the primary implementation agent for **AegisQDA**. Work only inside:
+Implementation work for **AegisQDA** is confined to:
 
 `/Users/klaus.behnamshad/Projects/AegisQDA`
 
@@ -28,7 +28,7 @@ creates typed sequential surrogates, requires human review, performs a second
 scan and structural validation, and invokes DigQDA only after a signed privacy
 release gate.
 
-Do the work; do not merely write another plan. Inspect the repository first,
+Inspect the repository before implementation,
 read all files under `docs/`, `config/`, `policies/`, `UPSTREAM.lock.json`, and
 the relevant interfaces under `vendor/digqda/`. Preserve the new AegisQDA Git
 history and treat `vendor/digqda/` as read-only.
@@ -46,7 +46,7 @@ history and treat `vendor/digqda/` as read-only.
 8. Also recognize `gemma4:e4b` only because it is explicitly present in the
    current local allowlist. Do not add models without a config/governance change.
 9. Bind the exact Ollama model digest in every accepted downstream run.
-10. Do not use Azure PII, OpenAI, hosted Presidio, telemetry or any web service.
+10. Do not use hosted detectors, hosted inference, telemetry or any web service.
 
 If `gemma4:12b` is not installed, `aegisqda doctor` must fail with an actionable
 message. Do not pull it without explicit user authorization because the model is
@@ -180,7 +180,7 @@ never patch the sibling or vendored copy silently.
   policy hash in the detection manifest.
 - Add custom recognizers for project identifiers and language-specific patterns.
 - Keep low thresholds to prioritize recall; false positives go to human review.
-- Do not call Azure AI Language or any external detector.
+- Do not call any hosted or external detector.
 - Implement a policy registry which defaults unknown entity types to `BLOCK`.
 - Second-pass analysis is necessary but not sufficient; reviewer sign-off remains
   mandatory.

@@ -67,18 +67,22 @@ def doctor_report() -> tuple[dict[str, Any], bool]:
             warnings.append(f"optional language {code} is blocked: {status['reason']}")
     try:
         models = ollama_models(base_url)
+        approved_pairs = {item.tag: item.digest for item in config.models.dpo_approved_local_pairs}
         report["installed_approved_models"] = {
             tag: digest
             for tag, digest in models.items()
-            if tag in config.models.dpo_approved_local_allowlist
+            if approved_pairs.get(tag) == digest
         }
         report["approved_model_tags"] = config.models.dpo_approved_local_allowlist
-        if config.models.default not in models:
+        if models.get(config.models.default) != approved_pairs[config.models.default]:
             problems.append(
-                f"default model {config.models.default} is not installed; "
-                "explicit authorization is required before pulling it"
+                f"default model {config.models.default} is absent or has an unqualified digest; "
+                "local qualification is required; no automatic model download"
             )
-        report["checks"]["ollama"] = "PASS" if config.models.default in models else "FAIL"
+        report["checks"]["ollama"] = (
+            "PASS" if models.get(config.models.default) == approved_pairs[config.models.default] else "FAIL"
+        )
+        report["qualified_model_pairs"] = approved_pairs
     except Exception:
         report["checks"]["ollama"] = "FAIL"
         problems.append("local Ollama model inventory is unavailable")

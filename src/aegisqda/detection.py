@@ -16,6 +16,7 @@ from presidio_analyzer.nlp_engine import NlpArtifacts, NlpEngine
 from presidio_analyzer.predefined_recognizers import SpacyRecognizer
 
 from .config import Policy
+from .errors import IntegrityError
 from .formats.document import Document, Region
 from .manifests import sha256_bytes
 from .languages import PACKS
@@ -64,6 +65,8 @@ TRANSCRIPT_ROLE_MARKERS = {"I", "P"}
 # only when the cue directly introduces a detected structured value.
 STRUCTURED_FIELD_CUES = {"IBAN": "IBAN_CODE"}
 
+CURRENT_RECOGNIZER_PACK = "aegis-custom-strict-v3"
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -75,9 +78,39 @@ class Finding:
     recognizer: str
     action: str
     value_sha256: str
+    # A mention can cross content lines, but never a paragraph or SRT cue
+    # boundary. Its envelope is reviewed once; these ranges preserve newlines
+    # during replacement. No identifying text is serialized in the ledger.
+    segments: tuple[tuple[int, int], ...] = ()
+    canonical_value_sha256: str | None = None
 
     def public_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+def canonical_person_value(value: str) -> str:
+    """Normalize presentation whitespace and one enclosing bracket pair only."""
+    value = value.strip()
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1].strip()
+    return " ".join(value.split())
+
+
+def require_current_detector(detection: dict[str, object]) -> None:
+    """Legacy artifacts cannot acquire a release under revised privacy rules."""
+    detector = detection.get("detector")
+    if not isinstance(detector, dict) or detector.get("recognizer_pack") != CURRENT_RECOGNIZER_PACK:
+        raise IntegrityError("outdated detector artifact requires a fresh scan and human review")
+
+
+@dataclass(frozen=True)
+class _Candidate:
+    entity_type: str
+    start: int
+    end: int
+    score: float
+    recognizer: str
+    ner_only: bool = False
 
 
 class LocalNlpEngine(NlpEngine):
@@ -249,7 +282,7 @@ def detector_versions(language: str) -> dict[str, object]:
         "nlp_strategy": installed_model or f"spacy.blank:{language}",
         "ner_model": installed_model,
         "threshold": 0.5,
-        "recognizer_pack": "aegis-custom-strict-v2",
+        "recognizer_pack": CURRENT_RECOGNIZER_PACK,
     }
 
 
@@ -257,37 +290,143 @@ def _inside_regions(start: int, end: int, regions: tuple[Region, ...]) -> bool:
     return any(start >= region.start and end <= region.end for region in regions)
 
 
+def mention_segments(document: Document, start: int, end: int) -> tuple[tuple[int, int], ...]:
+    """Validate a content-only mention and retain every non-newline segment."""
+    if not 0 <= start < end <= len(document.text):
+        return ()
+    covered = [region for region in document.regions if region.start < end and start < region.end]
+    if not covered or start < covered[0].start or end > covered[-1].end:
+        return ()
+    for left, right in zip(covered, covered[1:]):
+        # Exactly one line break connects content lines. Blank lines and cue
+        # numbers/timestamps are hard boundaries, even if NER joins them.
+        if not re.fullmatch(r"\r?\n", document.text[left.end:right.start]):
+            return ()
+    segments = tuple(
+        (start + match.start(), start + match.end())
+        for match in re.finditer(r"[^\r\n]+", document.text[start:end])
+    )
+    if not segments or segments[0][0] != start or segments[-1][1] != end:
+        return ()
+    if any(
+        not re.fullmatch(r"\r?\n", document.text[left[1]:right[0]])
+        for left, right in zip(segments, segments[1:])
+    ):
+        return ()
+    return segments
+
+
+def _projected_blocks(document: Document) -> Iterator[tuple[str, list[int]]]:
+    """Yield the same joined-line view used by transcript analysis, with offsets."""
+    blocks: list[list[Region]] = []
+    for region in document.regions:
+        if blocks and re.fullmatch(r"\r?\n", document.text[blocks[-1][-1].end:region.start]):
+            blocks[-1].append(region)
+        else:
+            blocks.append([region])
+    for block in blocks:
+        start, end = block[0].start, block[-1].end
+        raw = document.text[start:end]
+        if "\n" not in raw:
+            continue
+        chars: list[str] = []
+        positions: list[int] = []
+        for match in re.finditer(r"\r?\n|[^\r\n]", raw):
+            chars.append(" " if "\n" in match.group() else match.group())
+            positions.append(start + match.start())
+        yield "".join(chars), positions
+
+
+def _person_mentions(document: Document, candidates: list[_Candidate]) -> list[_Candidate]:
+    """Group overlapping PERSON results into one content-bounded mention."""
+    persons: list[_Candidate] = []
+    for item in candidates:
+        if item.entity_type != "PERSON":
+            continue
+        start, end = item.start, item.end
+        # NER commonly excludes an enclosing bracket pair. Include it in the
+        # reviewed/replaced range so the output has one complete placeholder.
+        if start > 0 and document.text[start - 1] == "[" and document.text[end:end + 1] == "]":
+            start, end = start - 1, end + 1
+        if mention_segments(document, start, end):
+            persons.append(_Candidate("PERSON", start, end, item.score, item.recognizer, item.ner_only))
+    persons.sort(key=lambda item: (item.start, -item.end))
+    grouped: list[_Candidate] = []
+    for item in persons:
+        if grouped and item.start < grouped[-1].end:
+            previous = grouped[-1]
+            end = max(previous.end, item.end)
+            if mention_segments(document, previous.start, end):
+                grouped[-1] = _Candidate(
+                    "PERSON", previous.start, end, max(previous.score, item.score),
+                    "Aegis-PERSON-mention-group",
+                    previous.ner_only and item.ner_only,
+                )
+                continue
+        grouped.append(item)
+    return [item for item in candidates if item.entity_type != "PERSON"] + grouped
+
+
 def scan_document(document: Document, language: str, policy: Policy) -> list[Finding]:
-    results = _engine(language).analyze(
+    engine = _engine(language)
+    results = engine.analyze(
         text=document.text,
         language=language,
         score_threshold=0.5,
         return_decision_process=False,
     )
-    candidates = [item for item in results if _inside_regions(item.start, item.end, document.regions)]
+    candidates = [
+        _Candidate(
+            item.entity_type, item.start, item.end, float(item.score),
+            str((item.recognition_metadata or {}).get("recognizer_name", "AegisRule")),
+            str((item.recognition_metadata or {}).get("recognizer_name", "")).endswith("spaCy-NER"),
+        )
+        for item in results
+        if _inside_regions(item.start, item.end, document.regions)
+        or (item.entity_type == "PERSON" and mention_segments(document, item.start, item.end))
+    ]
+    for text, positions in _projected_blocks(document):
+        for item in engine.analyze(
+            text=text, language=language, score_threshold=0.5, return_decision_process=False,
+        ):
+            if item.entity_type == "PERSON" and 0 <= item.start < item.end <= len(positions):
+                candidates.append(
+                    _Candidate(
+                        "PERSON", positions[item.start], positions[item.end - 1] + 1,
+                        float(item.score), "Aegis-PERSON-line-projection",
+                        str((item.recognition_metadata or {}).get("recognizer_name", "")).endswith("spaCy-NER"),
+                    )
+                )
+    # Exact released-token masking can leave a context rule (for example
+    # "name is ... and I live") matching only spaces. Such a span carries no
+    # identifier characters. Filter before PERSON bracket/group expansion so
+    # surrounding presentation cannot turn empty content into a finding.
+    # Every candidate containing any non-whitespace character remains eligible.
+    candidates = [
+        candidate for candidate in candidates
+        if document.text[candidate.start:candidate.end].strip()
+    ]
+    candidates = _person_mentions(document, candidates)
     candidates.sort(key=lambda item: (item.start, -(item.end - item.start), item.entity_type))
     strong_candidates = [item for item in candidates if item.entity_type in STRONG_STRUCTURED_TYPES]
     contextual_candidates = [
         item
         for item in candidates
         if item.entity_type in NER_ENTITY_TYPES
-        and not str(item.recognition_metadata.get("recognizer_name", "")).endswith("spaCy-NER")
+        and not item.ner_only
         and float(item.score) >= 0.8
     ]
     findings: list[Finding] = []
     seen_exact: set[tuple[int, int, str]] = set()
-    for item in candidates:
-        if document.text[item.start:item.end].startswith("[") and document.text[item.start:item.end].endswith("]"):
-            continue
-        recognizer = str(item.recognition_metadata.get("recognizer_name", ""))
-        is_spacy_ner = item.entity_type in NER_ENTITY_TYPES and recognizer.endswith("spaCy-NER")
+    for candidate in candidates:
+        is_spacy_ner = candidate.entity_type in NER_ENTITY_TYPES and candidate.ner_only
         if is_spacy_ner:
-            value = document.text[item.start:item.end]
-            line_start = item.start == 0 or document.text[item.start - 1] == "\n"
+            value = document.text[candidate.start:candidate.end]
+            line_start = candidate.start == 0 or document.text[candidate.start - 1] == "\n"
             if (
                 value in TRANSCRIPT_ROLE_MARKERS
                 and line_start
-                and document.text[item.end:item.end + 1] == ":"
+                and document.text[candidate.end:candidate.end + 1] == ":"
             ):
                 continue
 
@@ -295,7 +434,7 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
             # contains the NER span. Partial overlap remains visible: it could
             # include real adjacent content and therefore requires review.
             if any(
-                strong.start <= item.start and item.end <= strong.end
+                strong.start <= candidate.start and candidate.end <= strong.end
                 for strong in strong_candidates
             ):
                 continue
@@ -303,8 +442,8 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
             cue_type = STRUCTURED_FIELD_CUES.get(value.upper())
             if cue_type and any(
                 strong.entity_type == cue_type
-                and item.end <= strong.start
-                and re.fullmatch(r"\s*:\s*", document.text[item.end:strong.start])
+                and candidate.end <= strong.start
+                and re.fullmatch(r"\s*:\s*", document.text[candidate.end:strong.start])
                 for strong in strong_candidates
             ):
                 continue
@@ -313,29 +452,34 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
             # "centre culturel Ariston") are more specific than a generic NER
             # label. Suppress only a contained NER span, never a partial one.
             if any(
-                rule.start <= item.start and item.end <= rule.end
+                rule.start <= candidate.start and candidate.end <= rule.end
                 for rule in contextual_candidates
             ):
                 continue
         # Rules and NER may independently report the same typed span. Collapse
         # only that exact duplicate; preserve all partial or cross-type overlaps
         # so ambiguity remains visible to the reviewer and blocks release.
-        exact_key = (item.start, item.end, item.entity_type)
+        exact_key = (candidate.start, candidate.end, candidate.entity_type)
         if exact_key in seen_exact:
             continue
         seen_exact.add(exact_key)
-        value = document.text[item.start:item.end]
+        value = document.text[candidate.start:candidate.end]
         finding_id = f"F-{len(findings) + 1:04d}"
         findings.append(
             Finding(
                 finding_id=finding_id,
-                entity_type=item.entity_type,
-                start=item.start,
-                end=item.end,
-                score=round(float(item.score), 4),
-                recognizer=str(item.recognition_metadata.get("recognizer_name", "AegisRule")),
-                action=policy.action_for(item.entity_type).value,
+                entity_type=candidate.entity_type,
+                start=candidate.start,
+                end=candidate.end,
+                score=round(float(candidate.score), 4),
+                recognizer=candidate.recognizer,
+                action=policy.action_for(candidate.entity_type).value,
                 value_sha256=sha256_bytes(value.encode()),
+                segments=(mention_segments(document, candidate.start, candidate.end) if candidate.entity_type == "PERSON" else ()),
+                canonical_value_sha256=(
+                    sha256_bytes(canonical_person_value(value).encode())
+                    if candidate.entity_type == "PERSON" else None
+                ),
             )
         )
     return findings

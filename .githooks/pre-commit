@@ -1,0 +1,8 @@
+#!/bin/sh
+# Opt-in only: this file never replaces or edits an existing global hook setup.
+set -eu
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    printf '%s\n' 'BLOCKED: local repository scope is unavailable' >&2
+    exit 1
+}
+exec python3 "$repo_root/scripts/check_staged_privacy.py"
