@@ -15,21 +15,37 @@ from .errors import BoundaryError, IntegrityError
 from .manifests import canonical_bytes
 
 OPAQUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{2,63}")
+# Substring markers, matched case-insensitively against every path component.
 CLOUD_PARTS = {
     "icloud drive",
     "mobile documents",
     "com~apple~clouddocs",
+    "cloudstorage",  # macOS File Provider root: ~/Library/CloudStorage/<Provider>-<account>
     "dropbox",
     "onedrive",
     "google drive",
-    "box",
+    "googledrive",
     "sharepoint",
+    "nextcloud",
+    "owncloud",
+    "pcloud",
+    "seafile",
+    "synologydrive",
+    "synology drive",
+    "tresorit",
 }
+# Names too common to match as substrings ("Sandbox", "inbox", "my drivers"):
+# these must be the whole component, e.g. "Box", "Box Sync", "Box-Box", "My Drive".
+CLOUD_COMPONENT_RE = re.compile(r"box(?:[ -].*)?|my drive")
 MAX_SOURCE_BYTES = 50 * 1024 * 1024
 
 
 def is_cloud_path(path: Path) -> bool:
-    return any(marker in part.casefold() for part in path.parts for marker in CLOUD_PARTS)
+    for part in path.parts:
+        name = part.casefold()
+        if any(marker in name for marker in CLOUD_PARTS) or CLOUD_COMPONENT_RE.fullmatch(name):
+            return True
+    return False
 
 
 def validate_opaque_id(value: str, *, label: str = "opaque id") -> str:
@@ -122,8 +138,11 @@ def fresh_run_dir(root: Path, case_id: str) -> Path:
     return Path(tempfile.mkdtemp(prefix="run-", dir=case_dir)).resolve()
 
 
-def atomic_write(path: Path, data: bytes) -> None:
-    secure_dir(path.parent)
+def atomic_write(path: Path, data: bytes, *, secure_parent: bool = True) -> None:
+    if secure_parent:
+        secure_dir(path.parent)
+    elif not resolved_no_symlink(path.parent).is_dir():
+        raise BoundaryError("protected directory is not a directory")
     if path.exists() or path.is_symlink():
         raise IntegrityError("protected artifact already exists")
     fd, temporary = tempfile.mkstemp(prefix=".aegis-", dir=path.parent)

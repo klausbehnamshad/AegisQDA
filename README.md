@@ -9,6 +9,12 @@ Presidio-backed custom recognizers, requires complete terminal review, applies
 typed document-local surrogates, verifies structure and a second scan, and only
 then permits the consumer-owned DigQDA adapter to run.
 
+> **Privacy advisory [AEGIS-2026-001](docs/advisories/AEGIS-2026-001.md).**
+> Versions up to and including 0.1.0 could privacy-release names and other
+> identifiers that cross a line break (for example a name wrapped inside a
+> two-line SRT cue), sit in square brackets, or are separated by Unicode line
+> separators. Update to 0.1.1 and check existing runs with `aegisqda audit`.
+
 It does **not** claim universal anonymity. Its strongest result is the bounded
 process statement `PRIVACY_RELEASED under policy ... after automatic checks and
 human sign-off`. Any uncertainty remains blocking.
@@ -49,7 +55,15 @@ at runtime.
   --reviewer REVIEWER-001 --signing-key /secure/local/path/reviewer.pem
 .venv/bin/aegisqda transform /private/tmp/aegisqda-runs/CASE-001/run-...
 .venv/bin/aegisqda analyze /private/tmp/aegisqda-runs/CASE-001/run-...
+.venv/bin/aegisqda audit /private/tmp/aegisqda-runs
 ```
+
+`audit` is read-only and prints no source text. It lists every run under the
+run root with its recognizer pack and a verdict: `CURRENT`, `RESCAN_REQUIRED`
+(an unreleased run from a revoked pack), `AFFECTED` (released text in which the
+current detector finds identifiers), `NO_FINDINGS_UNDER_CURRENT_DETECTOR`, or
+`INVALID`. Runs scanned with a revoked recognizer pack cannot be reviewed,
+transformed or analyzed; scan the source again.
 
 `scan` and `run` intentionally return a non-zero `REVIEW_REQUIRED` state. The
 terminal reviewer sees protected context locally and must resolve every finding;

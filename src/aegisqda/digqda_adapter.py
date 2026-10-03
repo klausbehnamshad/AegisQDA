@@ -21,18 +21,6 @@ from .safeio import atomic_json, load_json, secure_dir, validate_run_dir
 from .workflow import utc_now
 
 
-def _strings(value: object) -> Iterator[str]:
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, list):
-        for item in value:
-            yield from _strings(item)
-    elif isinstance(value, dict):
-        for key, item in value.items():
-            if key not in {"_qda_run", "_qda_validation", "meta"}:
-                yield from _strings(item)
-
-
 def _field_strings(value: object, field: str = "") -> Iterator[tuple[str, str]]:
     if isinstance(value, str):
         yield field, value

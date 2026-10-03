@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from .audit import audit_runs
 from .digqda_adapter import analyze_run
 from .doctor import doctor_report
 from .errors import AegisError
@@ -45,6 +46,10 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--model")
     keygen = sub.add_parser("keygen-review", help="create an external local Ed25519 review key")
     keygen.add_argument("path", type=Path)
+    audit = sub.add_parser(
+        "audit", help="read-only check of existing runs against the current recognizer pack"
+    )
+    audit.add_argument("run_root", type=Path, nargs="?", default=DEFAULT_RUN_ROOT)
     return parser
 
 
@@ -81,6 +86,10 @@ def main(argv: list[str] | None = None) -> int:
             print("DOWNSTREAM_REVIEW_REQUIRED")
             print(f"manifest={path}")
             return 0
+        if args.command == "audit":
+            report, clean = audit_runs(args.run_root)
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0 if clean else 3
         if args.command == "keygen-review":
             private, public, key_id = create_review_key(args.path)
             print("REVIEW_KEY_CREATED")

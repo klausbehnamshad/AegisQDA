@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import DEFAULT_CONFIG, ROOT, load_config, load_policy
+from .detection import stale_pack_reason
 from .errors import DownstreamBlocked
 from .formats.document import parse_document
 from .local_boundary import reject_proxy_environment, validate_loopback_url, verify_upstream
@@ -80,6 +81,9 @@ def validate_release(run_dir: Path) -> tuple[Path, dict[str, Any]]:
         signed_review = verify_review_signature(review)
     except Exception as exc:
         raise DownstreamBlocked("valid privacy release artifacts are required") from exc
+    stale = stale_pack_reason(detection)
+    if stale:
+        raise DownstreamBlocked(stale)
     second_pass_consistent = _second_pass_is_consistent(second_pass)
     checks = (
         release.get("state") == "PRIVACY_RELEASED",

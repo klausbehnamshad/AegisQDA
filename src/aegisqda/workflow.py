@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib.metadata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,8 +11,14 @@ from typing import Any
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig, RecognizerResult
 
-from .config import AppConfig, Policy, PolicyAction, ROOT, load_config, load_policy
-from .detection import Finding, detector_versions, scan_document
+from .config import DEFAULT_CONFIG, AppConfig, Policy, PolicyAction, ROOT, load_config, load_policy
+from .detection import (
+    DETECTED_ENTITY_TYPES,
+    Finding,
+    detector_versions,
+    scan_document,
+    stale_pack_reason,
+)
 from .errors import IntegrityError, ReviewRequired
 from .formats.document import Document, fingerprint_text, parse_document, parse_document_bytes
 from .languages import get_pack
@@ -34,6 +40,10 @@ DETECTION_FILE = "detection.json"
 LEDGER_FILE = "detection-ledger.json"
 REVIEW_FILE = "review.json"
 RELEASE_FILE = "privacy-release.json"
+# Written on the later line of a mention that crossed a line break when removing
+# its rest would leave that line empty (an empty line would break SRT/TXT
+# structure). The mention's surrogate sits on its first line.
+CONTINUATION_MARK = "[…]"
 
 
 def utc_now() -> str:
@@ -45,13 +55,14 @@ def _policy_hash(config: AppConfig) -> str:
 
 
 def _config_hash() -> str:
-    return sha256_file((ROOT / "config" / "aegisqda.local.yaml").resolve())
+    return sha256_file(DEFAULT_CONFIG)
 
 
-def _preflight(config: AppConfig) -> None:
+def _preflight(config: AppConfig) -> str:
+    """Check the local boundary and return the verified upstream snapshot hash."""
     reject_proxy_environment()
     validate_loopback_url(config.execution.ollama_base_url)
-    verify_upstream(config)
+    return verify_upstream(config)
 
 
 def scan_source(
@@ -65,7 +76,7 @@ def scan_source(
     """Create a protected run and stop in REVIEW_REQUIRED state."""
     config = load_config()
     policy = load_policy(config)
-    _preflight(config)  # Deliberately before source validation/read.
+    upstream_sha256 = _preflight(config)  # Deliberately before source validation/read.
     get_pack(language)
     validate_opaque_id(case_id, label="case id")
     source = validate_source(source_path, synthetic=synthetic)
@@ -101,7 +112,7 @@ def scan_source(
             "config_sha256": _config_hash(),
             "detector": detector_versions(language),
             "endpoint": config.execution.ollama_base_url,
-            "upstream_sha256": verify_upstream(config),
+            "upstream_sha256": upstream_sha256,
         }
     )
     atomic_json(run_dir / DETECTION_FILE, manifest)
@@ -117,6 +128,9 @@ def _load_detection(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any], Docu
     ledger = load_json(run_dir / LEDGER_FILE)
     verify_seal(detection)
     verify_seal(ledger)
+    stale = stale_pack_reason(detection)
+    if stale:
+        raise IntegrityError(stale)
     if detection.get("state") != "REVIEW_REQUIRED":
         raise IntegrityError("detection artifact is not in REVIEW_REQUIRED state")
     if detection.get("ledger_sha256") != sha256_file(run_dir / LEDGER_FILE):
@@ -141,14 +155,74 @@ def _context(text: str, start: int, end: int, radius: int = 45) -> str:
     return text[max(0, start - radius):min(len(text), end + radius)].replace("\r", " ").replace("\n", " ↵ ")
 
 
+def _ask(prompt: str) -> str:
+    """Read one answer; end of input or Ctrl-C aborts without writing a review."""
+    try:
+        return input(prompt)
+    except (EOFError, KeyboardInterrupt) as exc:
+        raise ReviewRequired("review aborted; no review artifact was written") from exc
+
+
+def _inside_content_line(document: Document, start: int, end: int) -> bool:
+    return any(region.start <= start and end <= region.end for region in document.regions)
+
+
+def _occurrences(document: Document, needle: str) -> list[tuple[int, int]]:
+    """Non-overlapping occurrences of needle that lie inside one content line."""
+    spans: list[tuple[int, int]] = []
+    start = document.text.find(needle)
+    while start != -1:
+        end = start + len(needle)
+        if _inside_content_line(document, start, end):
+            spans.append((start, end))
+            start = document.text.find(needle, end)
+        else:
+            start = document.text.find(needle, start + 1)
+    return spans
+
+
+def _ask_missed_spans(document: Document) -> list[tuple[int, int]]:
+    needle = _ask("exact missed text (adds every single-line occurrence; empty = offsets): ").strip()
+    if needle:
+        spans = _occurrences(document, needle)
+        if not spans:
+            print("text not found inside a content line; nothing added")
+        return spans
+    try:
+        start = int(_ask("start offset: "))
+        end = int(_ask("end offset: "))
+    except ValueError:
+        print("invalid offset; nothing added")
+        return []
+    if not (0 <= start < end <= len(document.text)) or not _inside_content_line(document, start, end):
+        print("offsets must select a span inside one content line; nothing added")
+        return []
+    return [(start, end)]
+
+
+def _ask_entity_type(policy: Policy) -> str:
+    known = set(policy.entities) | DETECTED_ENTITY_TYPES
+    while True:
+        entity_type = _ask("entity type (for example PERSON): ").strip().upper()
+        if entity_type in known:
+            return entity_type
+        print("unknown entity type; known types: " + ", ".join(sorted(known)))
+
+
 def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None = None) -> Path:
     """Deliberately reveal local protected context and collect complete decisions."""
     validate_opaque_id(reviewer_id, label="reviewer id")
     detection, ledger, document, config, policy = _load_detection(run_dir)
     decisions: list[dict[str, str]] = []
+    covered: list[tuple[int, int]] = []
     findings = ledger.get("findings")
     if not isinstance(findings, list):
         raise IntegrityError("detection ledger findings are invalid")
+    group_members: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+    for finding in findings:
+        if isinstance(finding, dict) and isinstance(finding.get("group_id"), str):
+            group_members[finding["group_id"]].append(finding)
+    group_decisions: dict[str, dict[str, str]] = {}
     print("PROTECTED LOCAL REVIEW — context below may contain identifying text")
     for finding in findings:
         if not isinstance(finding, dict):
@@ -158,7 +232,23 @@ def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None
         entity = finding.get("entity_type")
         if not isinstance(finding_id, str) or not isinstance(start, int) or not isinstance(end, int):
             raise IntegrityError("detection ledger offsets are invalid")
-        print(f"\n{finding_id} {entity} [{start}:{end}]\n{_context(document.text, start, end)}")
+        group_id = finding.get("group_id")
+        if isinstance(group_id, str) and group_id in group_decisions:
+            # Later line of a mention split across lines: one decision covers it.
+            decisions.append({**group_decisions[group_id], "finding_id": finding_id})
+            if group_decisions[group_id]["decision"] != "FALSE_POSITIVE":
+                covered.append((start, end))
+            continue
+        members = group_members.get(group_id, []) if isinstance(group_id, str) else []
+        if members:
+            last_end = max(int(member["end"]) for member in members)
+            ids = ", ".join(str(member["finding_id"]) for member in members)
+            print(
+                f"\n{ids} {entity} [{start}:{last_end}] one mention across {len(members)} lines"
+                f"\n{_context(document.text, start, last_end)}"
+            )
+        else:
+            print(f"\n{finding_id} {entity} [{start}:{end}]\n{_context(document.text, start, end)}")
         action = str(finding.get("action"))
         allowed_answers = {"f", "a"}
         prompt = "false positive [f], abort [a]: "
@@ -169,31 +259,29 @@ def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None
             allowed_answers.add("g")
             prompt = "confirm generalization [g], false positive [f], abort [a]: "
         while True:
-            answer = input(prompt).strip().casefold()
+            answer = _ask(prompt).strip().casefold()
             if answer in allowed_answers:
                 break
         if answer == "a":
             raise ReviewRequired("review aborted; no review artifact was written")
         if answer == "f":
-            rationale = input("false-positive rationale (required): ").strip()
+            rationale = _ask("false-positive rationale (required): ").strip()
             if len(rationale) < 8:
                 raise ReviewRequired("false-positive rationale is too short; review was not written")
-            decisions.append(
-                {"finding_id": finding_id, "decision": "FALSE_POSITIVE", "rationale": rationale}
-            )
+            decision = {"finding_id": finding_id, "decision": "FALSE_POSITIVE", "rationale": rationale}
         else:
-            decision = "CONFIRMED" if answer == "c" else "GENERALIZE_CONFIRMED"
-            decisions.append({"finding_id": finding_id, "decision": decision})
+            resolution = "CONFIRMED" if answer == "c" else "GENERALIZE_CONFIRMED"
+            decision = {"finding_id": finding_id, "decision": resolution}
+            covered.append((start, end))
+        decisions.append(decision)
+        if members:
+            group_decisions[str(group_id)] = decision
     additions: list[dict[str, object]] = []
-    while input("add a missed detection? [y/N]: ").strip().casefold() == "y":
-        try:
-            start = int(input("start offset: "))
-            end = int(input("end offset: "))
-        except ValueError as exc:
-            raise ReviewRequired("invalid added-detection offset; review was not written") from exc
-        entity_type = input("entity type (for example PERSON): ").strip().upper()
-        if not (0 <= start < end <= len(document.text)) or "\n" in document.text[start:end]:
-            raise ReviewRequired("added detection must be a valid single-line source span")
+    while _ask("add a missed detection? [y/N]: ").strip().casefold() == "y":
+        spans = _ask_missed_spans(document)
+        if not spans:
+            continue
+        entity_type = _ask_entity_type(policy)
         action = policy.action_for(entity_type)
         if action is PolicyAction.REPLACE_AND_REVIEW:
             resolution = "CONFIRMED"
@@ -201,17 +289,25 @@ def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None
             resolution = "GENERALIZE_CONFIRMED"
         else:
             raise ReviewRequired("added detection is blocking under the current policy")
-        additions.append(
-            {
-                "finding_id": f"A-{len(additions) + 1:04d}",
-                "entity_type": entity_type,
-                "start": start,
-                "end": end,
-                "value_sha256": sha256_bytes(document.text[start:end].encode()),
-                "action": action.value,
-                "decision": resolution,
-            }
-        )
+        new_spans = [
+            (start, end)
+            for start, end in spans
+            if not any(left <= start and end <= right for left, right in covered)
+        ]
+        for start, end in new_spans:
+            additions.append(
+                {
+                    "finding_id": f"A-{len(additions) + 1:04d}",
+                    "entity_type": entity_type,
+                    "start": start,
+                    "end": end,
+                    "value_sha256": sha256_bytes(document.text[start:end].encode()),
+                    "action": action.value,
+                    "decision": resolution,
+                }
+            )
+            covered.append((start, end))
+        print(f"added {len(new_spans)} span(s); {len(spans) - len(new_spans)} already covered")
     return write_review(run_dir, reviewer_id, decisions, additions, signing_key=signing_key)
 
 
@@ -253,6 +349,13 @@ def write_review(
             pass
         else:
             raise ReviewRequired("review decision is not permitted by the policy action")
+    resolution_by_id = {item.get("finding_id"): item.get("decision") for item in decisions}
+    group_resolutions: defaultdict[str, set[object]] = defaultdict(set)
+    for item in findings:
+        if isinstance(item, dict) and isinstance(item.get("group_id"), str):
+            group_resolutions[item["group_id"]].add(resolution_by_id.get(item.get("finding_id")))
+    if any(len(resolutions) != 1 for resolutions in group_resolutions.values()):
+        raise ReviewRequired("the pieces of one mention split across lines need the same decision")
     additions = additions or []
     for addition in additions:
         start, end = addition.get("start"), addition.get("end")
@@ -328,6 +431,7 @@ def _resolved_findings(
     for addition in review.get("additions", []):
         if isinstance(addition, dict):
             resolved = dict(addition)
+            resolved.pop("group_id", None)
             resolved["resolution"] = addition.get("decision")
             confirmed.append(resolved)
     for finding in confirmed:
@@ -338,6 +442,20 @@ def _resolved_findings(
         if finding.get("value_sha256") != sha256_bytes(value.encode()):
             raise IntegrityError("reviewed finding no longer matches the source")
     return confirmed, false_exemptions
+
+
+def _continuation(document: Document, start: int, end: int, limit: int) -> tuple[int, int, str]:
+    """Remove the later-line piece of a split mention, or mark it if the line would empty.
+
+    Removal also takes the spaces after the piece, up to limit (the next finding).
+    """
+    region = next((r for r in document.regions if r.start <= start and end <= r.end), None)
+    if region is not None:
+        rest = document.text[end:min(region.end, limit)]
+        absorbed = end + len(rest) - len(rest.lstrip(" \t"))
+        if document.text[region.start:start].strip() or document.text[absorbed:region.end].strip():
+            return start, absorbed, ""
+    return start, end, CONTINUATION_MARK
 
 
 def transform_run(run_dir: Path) -> Path:
@@ -363,10 +481,27 @@ def transform_run(run_dir: Path) -> Path:
     for left, right in zip(confirmed, confirmed[1:]):
         if int(right["start"]) < int(left["end"]):
             raise ReviewRequired("overlapping reviewed findings require manual resolution")
+    # Pieces of one mention split across lines share a group: one surrogate on
+    # the first line, keyed by the whole mention so "Maria\nGonzalez" and
+    # "Maria Gonzalez" map to the same surrogate.
+    groups: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+    for finding in confirmed:
+        if isinstance(finding.get("group_id"), str):
+            groups[finding["group_id"]].append(finding)
+    ledger_group_sizes = Counter(
+        item["group_id"]
+        for item in ledger["findings"]
+        if isinstance(item, dict) and isinstance(item.get("group_id"), str)
+    )
+    for group_id, members in groups.items():
+        if len(members) != ledger_group_sizes[group_id] or len(
+            {member.get("resolution") for member in members}
+        ) != 1:
+            raise ReviewRequired("the pieces of one mention split across lines need the same decision")
     counters: defaultdict[str, int] = defaultdict(int)
     mapping: dict[tuple[str, str], str] = {}
     replacements: list[tuple[int, int, str]] = []
-    for finding in confirmed:
+    for index, finding in enumerate(confirmed):
         entity = str(finding["entity_type"]).upper()
         action = policy.action_for(entity)
         resolution = finding.get("resolution")
@@ -377,7 +512,17 @@ def transform_run(run_dir: Path) -> Path:
         else:
             raise ReviewRequired("policy action has no release-authorized transform")
         start, end = int(finding["start"]), int(finding["end"])
-        value = document.text[start:end]
+        members = groups.get(str(finding.get("group_id")), [])
+        if members and finding is not members[0]:
+            limit = (
+                int(confirmed[index + 1]["start"]) if index + 1 < len(confirmed) else len(document.text)
+            )
+            replacements.append(_continuation(document, start, end, max(limit, end)))
+            continue
+        if members:
+            value = " ".join(document.text[int(m["start"]):int(m["end"])] for m in members)
+        else:
+            value = document.text[start:end]
         key = (surrogate_entity, value)
         if key not in mapping:
             counters[surrogate_entity] += 1
@@ -385,7 +530,8 @@ def transform_run(run_dir: Path) -> Path:
         replacements.append((start, end, mapping[key]))
     transformed = document.text
     for start, end, replacement in reversed(replacements):
-        transformed = transformed[:start] + _presidio_replace(transformed[start:end], "AEGIS_VALUE", replacement) + transformed[end:]
+        new = _presidio_replace(transformed[start:end], "AEGIS_VALUE", replacement) if replacement else ""
+        transformed = transformed[:start] + new + transformed[end:]
     # Exact character ranges the emitted surrogates occupy in the transformed
     # text. The second-pass scan must ignore a finding that lies *inside* a
     # surrogate we just wrote (e.g. spaCy tagging "PERSON_001" as PERSON) — but
@@ -395,8 +541,8 @@ def transform_run(run_dir: Path) -> Path:
     delta = 0
     for start, end, replacement in sorted(replacements):
         final_start = start + delta
-        final_end = final_start + len(replacement)
-        surrogate_ranges.append((final_start, final_end))
+        if replacement:  # a removed continuation leaves no surrogate behind
+            surrogate_ranges.append((final_start, final_start + len(replacement)))
         delta += len(replacement) - (end - start)
     mapping.clear()
     if fingerprint_text(transformed, document.kind) != document.fingerprint:

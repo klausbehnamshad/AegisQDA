@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.metadata
 import importlib.util
 import re
-from dataclasses import asdict, dataclass
+from bisect import bisect_right
+from dataclasses import asdict, dataclass, replace
 from functools import lru_cache
 from typing import Iterable, Iterator
 
@@ -16,6 +18,7 @@ from presidio_analyzer.nlp_engine import NlpArtifacts, NlpEngine
 from presidio_analyzer.predefined_recognizers import SpacyRecognizer
 
 from .config import Policy
+from .errors import BoundaryError
 from .formats.document import Document, Region
 from .manifests import sha256_bytes
 from .languages import PACKS
@@ -64,6 +67,26 @@ TRANSCRIPT_ROLE_MARKERS = {"I", "P"}
 # only when the cue directly introduces a detected structured value.
 STRUCTURED_FIELD_CUES = {"IBAN": "IBAN_CODE"}
 
+RECOGNIZER_PACK = "aegis-custom-strict-v3"
+# Packs with a published privacy defect. Runs scanned with them cannot be
+# reviewed, transformed or analyzed; the source has to be scanned again.
+REVOKED_RECOGNIZER_PACKS = {
+    "aegis-custom-strict-v1": "AEGIS-2026-001",
+    "aegis-custom-strict-v2": "AEGIS-2026-001",
+}
+SCORE_THRESHOLD = 0.5
+# spaCy refuses longer texts (Language.max_length, error E088); fail with a
+# clear boundary message instead of an unexplained processing failure.
+MAX_SCAN_CHARS = 1_000_000
+
+# recognition_metadata key that links the per-line pieces of one analyzer span.
+GROUP_KEY = "aegis_group"
+
+# Exact shape of a surrogate emitted by transform_run, e.g. [PERSON_001]. Only
+# this shape is skipped: a blanket bracket exemption would also hide real
+# bracketed content such as "[Jane Example]".
+SURROGATE_RE = re.compile(r"\[[A-Z][A-Z0-9_]*_\d{3,}\]")
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -75,6 +98,9 @@ class Finding:
     recognizer: str
     action: str
     value_sha256: str
+    # Shared by the per-line pieces of one mention that crossed a line break,
+    # so they are reviewed together and replaced by one surrogate.
+    group_id: str | None = None
 
     def public_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -205,6 +231,12 @@ LANGUAGE_PATTERNS: dict[str, dict[str, list[tuple[str, str, float]]]] = {
     },
 }
 
+# Every entity type a recognizer can emit, including indirect identifiers such
+# as AGE or KINSHIP that the policy leaves at its default BLOCK action.
+DETECTED_ENTITY_TYPES = frozenset(COMMON_PATTERNS) | NER_ENTITY_TYPES | {
+    entity for patterns in LANGUAGE_PATTERNS.values() for entity in patterns
+}
+
 
 @lru_cache(maxsize=4)
 def _engine(language: str) -> AnalyzerEngine:
@@ -248,23 +280,64 @@ def detector_versions(language: str) -> dict[str, object]:
         "spacy": importlib.metadata.version("spacy"),
         "nlp_strategy": installed_model or f"spacy.blank:{language}",
         "ner_model": installed_model,
-        "threshold": 0.5,
-        "recognizer_pack": "aegis-custom-strict-v2",
+        "threshold": SCORE_THRESHOLD,
+        "recognizer_pack": RECOGNIZER_PACK,
     }
 
 
-def _inside_regions(start: int, end: int, regions: tuple[Region, ...]) -> bool:
-    return any(start >= region.start and end <= region.end for region in regions)
+def stale_pack_reason(detection: dict[str, object]) -> str | None:
+    """Explain why a run's detection cannot be used with this detector, if so."""
+    detector = detection.get("detector")
+    pack = detector.get("recognizer_pack") if isinstance(detector, dict) else None
+    if pack == RECOGNIZER_PACK:
+        return None
+    advisory = REVOKED_RECOGNIZER_PACKS.get(str(pack))
+    if advisory:
+        return (
+            f"run was scanned with recognizer pack {pack}, which is affected by advisory "
+            f"{advisory}; scan the source again"
+        )
+    return f"run was scanned with recognizer pack {pack}, not {RECOGNIZER_PACK}; scan the source again"
+
+
+def _region_pieces(
+    start: int, end: int, regions: tuple[Region, ...], starts: list[int]
+) -> list[tuple[int, int]]:
+    """Clip a span to the content regions it overlaps instead of dropping it."""
+    pieces: list[tuple[int, int]] = []
+    for region in regions[max(bisect_right(starts, start) - 1, 0):]:
+        if region.start >= end:
+            break
+        piece_start, piece_end = max(start, region.start), min(end, region.end)
+        if piece_start < piece_end:
+            pieces.append((piece_start, piece_end))
+    return pieces
 
 
 def scan_document(document: Document, language: str, policy: Policy) -> list[Finding]:
+    if len(document.text) > MAX_SCAN_CHARS:
+        raise BoundaryError("document exceeds the 1,000,000-character local detector bound")
     results = _engine(language).analyze(
         text=document.text,
         language=language,
-        score_threshold=0.5,
+        score_threshold=SCORE_THRESHOLD,
         return_decision_process=False,
     )
-    candidates = [item for item in results if _inside_regions(item.start, item.end, document.regions)]
+    # A span that crosses a line break (e.g. a name wrapped inside an SRT cue)
+    # is split into per-line pieces; dropping it would silently hide it.
+    starts = [region.start for region in document.regions]
+    candidates = []
+    for number, item in enumerate(results):
+        pieces = _region_pieces(item.start, item.end, document.regions, starts)
+        for piece_start, piece_end in pieces:
+            piece = copy.copy(item)
+            piece.start, piece.end = piece_start, piece_end
+            if len(pieces) > 1:
+                piece.recognition_metadata = {
+                    **(item.recognition_metadata or {}),
+                    GROUP_KEY: number,
+                }
+            candidates.append(piece)
     candidates.sort(key=lambda item: (item.start, -(item.end - item.start), item.entity_type))
     strong_candidates = [item for item in candidates if item.entity_type in STRONG_STRUCTURED_TYPES]
     contextual_candidates = [
@@ -277,7 +350,7 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
     findings: list[Finding] = []
     seen_exact: set[tuple[int, int, str]] = set()
     for item in candidates:
-        if document.text[item.start:item.end].startswith("[") and document.text[item.start:item.end].endswith("]"):
+        if SURROGATE_RE.fullmatch(document.text[item.start:item.end]):
             continue
         recognizer = str(item.recognition_metadata.get("recognizer_name", ""))
         is_spacy_ner = item.entity_type in NER_ENTITY_TYPES and recognizer.endswith("spaCy-NER")
@@ -336,6 +409,25 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
                 recognizer=str(item.recognition_metadata.get("recognizer_name", "AegisRule")),
                 action=policy.action_for(item.entity_type).value,
                 value_sha256=sha256_bytes(value.encode()),
+                group_id=item.recognition_metadata.get(GROUP_KEY),
             )
         )
-    return findings
+    return _number_groups(findings)
+
+
+def _number_groups(findings: list[Finding]) -> list[Finding]:
+    """Keep groups that still have several pieces and number them G-0001..."""
+    sizes: dict[object, int] = {}
+    for finding in findings:
+        if finding.group_id is not None:
+            sizes[finding.group_id] = sizes.get(finding.group_id, 0) + 1
+    names: dict[object, str] = {}
+    numbered: list[Finding] = []
+    for finding in findings:
+        group = finding.group_id
+        if group is not None and sizes[group] > 1:
+            names.setdefault(group, f"G-{len(names) + 1:04d}")
+            numbered.append(replace(finding, group_id=names[group]))
+        else:
+            numbered.append(replace(finding, group_id=None))
+    return numbered
