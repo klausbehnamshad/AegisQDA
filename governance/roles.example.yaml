@@ -1,0 +1,42 @@
+# Beispiel-Skeleton eines Trust-Store-Auszugs (Rollenzuordnung).
+# Datei wird NICHT in den Freigabepfad geladen. Der reale Trust Store
+# lebt außerhalb des Repositories, ist signiert, trägt eine monotone
+# Seriennummer und einen previous_sha256-Link zur Vorversion.
+#
+# PR2 liefert Parser, Signaturprüfung, previous_sha256-Kette und die
+# Ablehnung von Rollback (ältere Seriennummer nach neuerer Seriennummer).
+#
+# Fingerprints sind KEINE Personennamen — es sind sha256-Fingerprints
+# der Ed25519 Public Keys.
+
+trust_store:
+  version: 0
+  previous_sha256: null
+  serial: 1
+  issued_at: "2026-08-10T00:00:00Z"
+  issuer_key_fingerprint: "REPLACE-ME-register-owner-key-fingerprint-sha256"
+  entries:
+    - key_fingerprint: "REPLACE-ME-dpo-key-fingerprint-sha256"
+      role: DPO
+      valid_from: "2026-08-10T00:00:00Z"
+      valid_until: null
+      status: ACTIVE
+    - key_fingerprint: "REPLACE-ME-pi-key-fingerprint-sha256"
+      role: PI
+      valid_from: "2026-08-10T00:00:00Z"
+      valid_until: null
+      status: ACTIVE
+    - key_fingerprint: "REPLACE-ME-reviewer-key-fingerprint-sha256"
+      role: REVIEWER
+      valid_from: "2026-08-10T00:00:00Z"
+      valid_until: null
+      status: ACTIVE
+    - key_fingerprint: "REPLACE-ME-release-approver-key-fingerprint-sha256"
+      role: RELEASE_APPROVER
+      valid_from: "2026-08-10T00:00:00Z"
+      valid_until: null
+      status: ACTIVE
+    # Optional: Stellvertretungen als weitere ACTIVE-Einträge derselben
+    # Rolle. Beim Offboarding wird der bisherige Eintrag in der nächsten
+    # Trust-Store-Version mit status: REVOKED überschrieben; die frühere
+    # Version bleibt Teil der Kette.

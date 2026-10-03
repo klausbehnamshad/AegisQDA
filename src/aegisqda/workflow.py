@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,13 +13,18 @@ from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig, RecognizerResult
 
 from .config import AppConfig, Policy, PolicyAction, ROOT, load_config, load_policy
-from .detection import Finding, detector_versions, scan_document
+from .detection import (
+    Finding, canonical_person_value, detector_versions, mention_segments,
+    require_current_detector, scan_document,
+)
 from .errors import IntegrityError, ReviewRequired
 from .formats.document import Document, fingerprint_text, parse_document, parse_document_bytes
+from .generalization import generalize
 from .languages import get_pack
 from .local_boundary import reject_proxy_environment, validate_loopback_url, verify_upstream
 from .manifests import seal, sha256_bytes, sha256_file, verify_seal
-from .review_signature import sign_review, verify_review_signature
+from .review_signature import sign_review, verify_synthetic_review
+from .synthetic_registry import source_registration, validate_source_registration
 from .safeio import (
     atomic_json,
     atomic_write,
@@ -70,6 +76,7 @@ def scan_source(
     validate_opaque_id(case_id, label="case id")
     source = validate_source(source_path, synthetic=synthetic)
     source_bytes = read_stable_source(source)
+    registration = source_registration(source, source_bytes, language)
     document = parse_document_bytes(source_bytes, source.suffix)
     findings = scan_document(document, language, policy)
     run_dir = fresh_run_dir(run_root, case_id)
@@ -91,6 +98,7 @@ def scan_source(
             "case_id": case_id,
             "language": language,
             "synthetic_only": synthetic,
+            "source_registration": registration,
             "source_file": source_name,
             "source_sha256": sha256_file(run_dir / source_name),
             "structure": document.fingerprint,
@@ -117,6 +125,16 @@ def _load_detection(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any], Docu
     ledger = load_json(run_dir / LEDGER_FILE)
     verify_seal(detection)
     verify_seal(ledger)
+    require_current_detector(detection)
+    if detection.get("synthetic_only") is not True:
+        raise IntegrityError("real-data authorization is not implemented; a synthetic source is required")
+    validate_source_registration(
+        detection.get("source_registration"), str(detection.get("source_sha256")),
+        str(detection.get("language")),
+    )
+    language = detection.get("language")
+    if not isinstance(language, str) or detection.get("detector") != detector_versions(language):
+        raise IntegrityError("detector configuration changed; a fresh scan and human review are required")
     if detection.get("state") != "REVIEW_REQUIRED":
         raise IntegrityError("detection artifact is not in REVIEW_REQUIRED state")
     if detection.get("ledger_sha256") != sha256_file(run_dir / LEDGER_FILE):
@@ -134,11 +152,44 @@ def _load_detection(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any], Docu
     document = parse_document(source)
     if document.fingerprint != detection.get("structure"):
         raise IntegrityError("protected source structure changed after detection")
+    findings = ledger.get("findings")
+    if not isinstance(findings, list) or detection.get("finding_count") != len(findings):
+        raise IntegrityError("detection ledger finding count is invalid")
+    identifiers: set[str] = set()
+    for finding in findings:
+        if not isinstance(finding, dict) or not isinstance(finding.get("finding_id"), str):
+            raise IntegrityError("detection ledger finding is invalid")
+        if finding["finding_id"] in identifiers:
+            raise IntegrityError("detection ledger finding identifiers are duplicated")
+        identifiers.add(finding["finding_id"])
+        _finding_segments(finding, document)
     return detection, ledger, document, config, policy
 
 
 def _context(text: str, start: int, end: int, radius: int = 45) -> str:
     return text[max(0, start - radius):min(len(text), end + radius)].replace("\r", " ").replace("\n", " ↵ ")
+
+
+def _finding_segments(finding: dict[str, Any], document: Document) -> tuple[tuple[int, int], ...]:
+    start, end = finding.get("start"), finding.get("end")
+    if type(start) is not int or type(end) is not int:
+        raise IntegrityError("reviewed finding offsets are invalid")
+    segments = mention_segments(document, start, end)
+    if not segments or (finding.get("entity_type") != "PERSON" and len(segments) != 1):
+        raise IntegrityError("reviewed finding is outside a valid content span")
+    declared = finding.get("segments")
+    if declared and declared != [list(segment) for segment in segments] and declared != segments:
+        raise IntegrityError("reviewed mention segments do not match the source")
+    value = document.text[start:end]
+    if finding.get("value_sha256") != sha256_bytes(value.encode()):
+        raise IntegrityError("reviewed finding no longer matches the source")
+    canonical_hash = finding.get("canonical_value_sha256")
+    if canonical_hash is not None and (
+        finding.get("entity_type") != "PERSON"
+        or canonical_hash != sha256_bytes(canonical_person_value(value).encode())
+    ):
+        raise IntegrityError("reviewed mention canonical binding failed")
+    return segments
 
 
 def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None = None) -> Path:
@@ -192,8 +243,9 @@ def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None
         except ValueError as exc:
             raise ReviewRequired("invalid added-detection offset; review was not written") from exc
         entity_type = input("entity type (for example PERSON): ").strip().upper()
-        if not (0 <= start < end <= len(document.text)) or "\n" in document.text[start:end]:
-            raise ReviewRequired("added detection must be a valid single-line source span")
+        segments = mention_segments(document, start, end)
+        if not segments or (entity_type != "PERSON" and len(segments) != 1):
+            raise ReviewRequired("added detection must be within one contiguous content block")
         action = policy.action_for(entity_type)
         if action is PolicyAction.REPLACE_AND_REVIEW:
             resolution = "CONFIRMED"
@@ -210,6 +262,11 @@ def interactive_review(run_dir: Path, reviewer_id: str, signing_key: Path | None
                 "value_sha256": sha256_bytes(document.text[start:end].encode()),
                 "action": action.value,
                 "decision": resolution,
+                "segments": [list(segment) for segment in segments] if entity_type == "PERSON" else [],
+                "canonical_value_sha256": (
+                    sha256_bytes(canonical_person_value(document.text[start:end]).encode())
+                    if entity_type == "PERSON" else None
+                ),
             }
         )
     return write_review(run_dir, reviewer_id, decisions, additions, signing_key=signing_key)
@@ -254,15 +311,21 @@ def write_review(
         else:
             raise ReviewRequired("review decision is not permitted by the policy action")
     additions = additions or []
+    addition_ids: set[str] = set()
     for addition in additions:
+        addition_id = addition.get("finding_id")
+        if not isinstance(addition_id, str) or addition_id in expected or addition_id in addition_ids:
+            raise ReviewRequired("added detections require unique finding identifiers")
+        validate_opaque_id(addition_id, label="added finding id")
+        addition_ids.add(addition_id)
         start, end = addition.get("start"), addition.get("end")
         entity = addition.get("entity_type")
         if not isinstance(start, int) or not isinstance(end, int) or not isinstance(entity, str):
             raise ReviewRequired("added detection has invalid fields")
-        if not (0 <= start < end <= len(document.text)) or "\n" in document.text[start:end]:
-            raise ReviewRequired("added detection has invalid bounds")
-        if addition.get("value_sha256") != sha256_bytes(document.text[start:end].encode()):
-            raise ReviewRequired("added detection hash does not match the source")
+        try:
+            _finding_segments(addition, document)
+        except IntegrityError as exc:
+            raise ReviewRequired("added detection has invalid bounds or source binding") from exc
         action = policy.action_for(entity)
         expected_resolution = (
             "CONFIRMED"
@@ -293,6 +356,10 @@ def write_review(
 
 
 def _presidio_replace(value: str, entity_type: str, replacement: str) -> str:
+    # Presidio's replace operator treats an empty new_value as absent and
+    # emits its default token. Split-mention tails require actual deletion.
+    if replacement == "":
+        return ""
     result = AnonymizerEngine().anonymize(
         text=value,
         analyzer_results=[RecognizerResult(entity_type=entity_type, start=0, end=len(value), score=1.0)],
@@ -309,6 +376,11 @@ def _resolved_findings(
     if not isinstance(findings, list) or not isinstance(decisions, list):
         raise IntegrityError("review binding is invalid")
     by_id = {item.get("finding_id"): item for item in findings if isinstance(item, dict)}
+    if len(by_id) != len(findings) or any(not isinstance(key, str) for key in by_id):
+        raise IntegrityError("detection finding identifiers are invalid")
+    received = [item.get("finding_id") for item in decisions if isinstance(item, dict)]
+    if len(received) != len(decisions) or len(received) != len(by_id) or set(received) != set(by_id):
+        raise ReviewRequired("every finding requires exactly one review decision")
     confirmed: list[dict[str, Any]] = []
     false_exemptions: set[tuple[str, str]] = set()
     for decision in decisions:
@@ -320,45 +392,38 @@ def _resolved_findings(
             resolved["resolution"] = decision.get("decision")
             confirmed.append(resolved)
         elif decision.get("decision") == "FALSE_POSITIVE":
+            if not isinstance(decision.get("rationale"), str) or len(decision["rationale"].strip()) < 8:
+                raise ReviewRequired("false-positive decisions require a rationale")
             false_exemptions.add(
                 (str(finding.get("entity_type")), str(finding.get("value_sha256")))
             )
         else:
             raise ReviewRequired("review contains an unresolved finding")
-    for addition in review.get("additions", []):
-        if isinstance(addition, dict):
-            resolved = dict(addition)
-            resolved["resolution"] = addition.get("decision")
-            confirmed.append(resolved)
+    additions = review.get("additions", [])
+    if not isinstance(additions, list):
+        raise IntegrityError("review additions must be a list")
+    identifiers = set(by_id)
+    for addition in additions:
+        if (
+            not isinstance(addition, dict) or not isinstance(addition.get("finding_id"), str)
+            or addition["finding_id"] in identifiers
+        ):
+            raise IntegrityError("review addition identifiers are invalid or duplicated")
+        identifiers.add(addition["finding_id"])
+        resolved = dict(addition)
+        resolved["resolution"] = addition.get("decision")
+        confirmed.append(resolved)
     for finding in confirmed:
-        start, end = finding.get("start"), finding.get("end")
-        if not isinstance(start, int) or not isinstance(end, int):
-            raise IntegrityError("reviewed finding offsets are invalid")
-        value = document.text[start:end]
-        if finding.get("value_sha256") != sha256_bytes(value.encode()):
-            raise IntegrityError("reviewed finding no longer matches the source")
+        _finding_segments(finding, document)
     return confirmed, false_exemptions
 
 
-def transform_run(run_dir: Path) -> Path:
-    run_dir = validate_run_dir(run_dir)
-    detection, ledger, document, config, policy = _load_detection(run_dir)
-    if not (run_dir / REVIEW_FILE).is_file():
-        raise ReviewRequired("accepted human review is required")
-    review = load_json(run_dir / REVIEW_FILE)
-    verify_seal(review)
-    signed_review = verify_review_signature(review)
-    if not signed_review and detection.get("synthetic_only") is not True:
-        raise ReviewRequired("real-data review requires a trusted local signature")
-    if review.get("state") != "ACCEPTED":
-        raise ReviewRequired("accepted human review is required")
-    if review.get("detection_sha256") != sha256_file(run_dir / DETECTION_FILE):
-        raise IntegrityError("review is stale or bound to another detection")
-    if review.get("ledger_sha256") != sha256_file(run_dir / LEDGER_FILE):
-        raise IntegrityError("review ledger binding failed")
-    if review.get("policy_sha256") != _policy_hash(config):
-        raise IntegrityError("policy changed after review")
-    confirmed, false_exemptions = _resolved_findings(ledger, review, document)
+def render_reviewed_source(
+    document: Document, ledger: dict[str, Any], review: dict[str, Any],
+    policy: Policy, language: str,
+) -> tuple[str, list[tuple[int, int]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Replay the exact policy-authorized transformation without file writes."""
+    confirmed, _ = _resolved_findings(ledger, review, document)
     confirmed.sort(key=lambda item: (int(item["start"]), -int(item["end"])))
     for left, right in zip(confirmed, confirmed[1:]):
         if int(right["start"]) < int(left["end"]):
@@ -366,23 +431,54 @@ def transform_run(run_dir: Path) -> Path:
     counters: defaultdict[str, int] = defaultdict(int)
     mapping: dict[tuple[str, str], str] = {}
     replacements: list[tuple[int, int, str]] = []
+    generalized_sources: dict[int, dict[str, Any]] = {}
     for finding in confirmed:
         entity = str(finding["entity_type"]).upper()
         action = policy.action_for(entity)
         resolution = finding.get("resolution")
+        start, end = int(finding["start"]), int(finding["end"])
+        value = document.text[start:end]
         if action is PolicyAction.REPLACE_AND_REVIEW and resolution == "CONFIRMED":
             surrogate_entity = entity
         elif action is PolicyAction.GENERALIZE_AND_REVIEW and resolution == "GENERALIZE_CONFIRMED":
             surrogate_entity = f"{entity}_GENERALIZED"
+            result = generalize(entity, value, language)
+            generalized_sources[start] = {
+                "finding_id": finding["finding_id"], "entity_type": entity,
+                "rule_id": result.rule_id, "text": result.text,
+            }
         else:
             raise ReviewRequired("policy action has no release-authorized transform")
-        start, end = int(finding["start"]), int(finding["end"])
-        value = document.text[start:end]
-        key = (surrogate_entity, value)
+        key = (surrogate_entity, canonical_person_value(value) if entity == "PERSON" else value)
         if key not in mapping:
-            counters[surrogate_entity] += 1
-            mapping[key] = f"[{surrogate_entity}_{counters[surrogate_entity]:03d}]"
-        replacements.append((start, end, mapping[key]))
+            if start in generalized_sources:
+                mapping[key] = generalized_sources[start]["text"]
+            else:
+                counters[surrogate_entity] += 1
+                mapping[key] = f"[{surrogate_entity}_{counters[surrogate_entity]:03d}]"
+        segments = _finding_segments(finding, document)
+        for segment_number, (segment_start, segment_end) in enumerate(segments):
+            replacement = mapping[key] if segment_number == 0 else ""
+            # Removing a split name must not turn a content line into an SRT
+            # cue separator. A neutral marker preserves that line's structure.
+            line_start = document.text.rfind("\n", 0, segment_start) + 1
+            line_end = document.text.find("\n", segment_end)
+            if line_end < 0:
+                line_end = len(document.text)
+            if not replacement:
+                next_finding_start = min(
+                    (int(item["start"]) for item in confirmed if int(item["start"]) >= segment_end),
+                    default=line_end,
+                )
+                limit = min(line_end, next_finding_start)
+                following_space = re.match(r"[ \t]*", document.text[segment_end:limit])
+                assert following_space is not None
+                segment_end += following_space.end()
+            remaining = document.text[line_start:segment_start] + document.text[segment_end:line_end]
+            if not replacement and not remaining.strip():
+                replacement = "[…]"
+            replacements.append((segment_start, segment_end, replacement))
+    replacements.sort()
     transformed = document.text
     for start, end, replacement in reversed(replacements):
         transformed = transformed[:start] + _presidio_replace(transformed[start:end], "AEGIS_VALUE", replacement) + transformed[end:]
@@ -392,15 +488,60 @@ def transform_run(run_dir: Path) -> Path:
     # only that: this is position-bound to surrogates AegisQDA generated, not a
     # blanket exemption for bracketed text, which could hide real content.
     surrogate_ranges: list[tuple[int, int]] = []
+    generalizations: list[dict[str, Any]] = []
     delta = 0
     for start, end, replacement in sorted(replacements):
+        if not replacement:
+            delta -= end - start
+            continue
         final_start = start + delta
         final_end = final_start + len(replacement)
-        surrogate_ranges.append((final_start, final_end))
+        if start in generalized_sources:
+            generalizations.append({
+                **generalized_sources[start], "start": final_start, "end": final_end,
+            })
+        else:
+            surrogate_ranges.append((final_start, final_end))
         delta += len(replacement) - (end - start)
     mapping.clear()
+    false_positive_bindings: list[dict[str, Any]] = []
+    finding_by_id = {item["finding_id"]: item for item in ledger["findings"]}
+    for decision in review["decisions"]:
+        if decision["decision"] != "FALSE_POSITIVE":
+            continue
+        original = finding_by_id[decision["finding_id"]]
+        start, end = original["start"], original["end"]
+        if any(left < end and start < right for left, right, _ in replacements):
+            continue
+        shift = sum(len(value) - (right - left) for left, right, value in replacements if right <= start)
+        false_positive_bindings.append({
+            "finding_id": original["finding_id"], "entity_type": original["entity_type"],
+            "value_sha256": original["value_sha256"], "start": start + shift, "end": end + shift,
+        })
     if fingerprint_text(transformed, document.kind) != document.fingerprint:
         raise IntegrityError("transform caused structural drift")
+    return transformed, surrogate_ranges, generalizations, false_positive_bindings
+
+
+def transform_run(run_dir: Path) -> Path:
+    run_dir = validate_run_dir(run_dir)
+    detection, ledger, document, config, policy = _load_detection(run_dir)
+    if not (run_dir / REVIEW_FILE).is_file():
+        raise ReviewRequired("accepted human review is required")
+    review = load_json(run_dir / REVIEW_FILE)
+    verify_seal(review)
+    verify_synthetic_review(review, config.authorization.trusted_review_key_ids)
+    if review.get("state") != "ACCEPTED":
+        raise ReviewRequired("accepted human review is required")
+    if review.get("detection_sha256") != sha256_file(run_dir / DETECTION_FILE):
+        raise IntegrityError("review is stale or bound to another detection")
+    if review.get("ledger_sha256") != sha256_file(run_dir / LEDGER_FILE):
+        raise IntegrityError("review ledger binding failed")
+    if review.get("policy_sha256") != _policy_hash(config):
+        raise IntegrityError("policy changed after review")
+    transformed, surrogate_ranges, generalizations, false_positive_bindings = render_reviewed_source(
+        document, ledger, review, policy, str(detection["language"]),
+    )
     transformed_name = "transformed." + document.kind
     atomic_write(run_dir / transformed_name, transformed.encode())
     transformed_doc = parse_document(run_dir / transformed_name)
@@ -411,11 +552,29 @@ def transform_run(run_dir: Path) -> Path:
 
     surrogate_exemptions = [finding for finding in second_findings if _within_surrogate(finding)]
     surrogate_exemption_set = set(surrogate_exemptions)
+    generalization_exemptions = [
+        finding for finding in second_findings
+        if any(
+            (item["entity_type"] == finding.entity_type or finding.entity_type in {"PERSON", "LOCATION", "ORGANIZATION"})
+            and item["start"] <= finding.start < finding.end <= item["end"]
+            for item in generalizations
+        )
+    ]
+    false_positive_exemptions = [
+        finding for finding in second_findings
+        if any(
+            item["entity_type"] == finding.entity_type
+            and item["value_sha256"] == finding.value_sha256
+            and item["start"] == finding.start and item["end"] == finding.end
+            for item in false_positive_bindings
+        )
+    ]
     unresolved = [
         finding
         for finding in second_findings
-        if (finding.entity_type, finding.value_sha256) not in false_exemptions
+        if finding not in false_positive_exemptions
         and finding not in surrogate_exemption_set
+        and finding not in generalization_exemptions
     ]
     second_pass = seal(
         {
@@ -423,6 +582,12 @@ def transform_run(run_dir: Path) -> Path:
             "created_at": utc_now(),
             "finding_count": len(second_findings),
             "surrogate_ranges": [[start, end] for start, end in surrogate_ranges],
+            "generalizations": generalizations,
+            "false_positive_bindings": false_positive_bindings,
+            "false_positive_exempt_count": len(false_positive_exemptions),
+            "false_positive_exempt_finding_ids": [item.finding_id for item in false_positive_exemptions],
+            "generalization_exempt_count": len(generalization_exemptions),
+            "generalization_exempt_finding_ids": [item.finding_id for item in generalization_exemptions],
             "surrogate_exempt_count": len(surrogate_exemptions),
             "surrogate_exempt_finding_ids": [
                 finding.finding_id for finding in surrogate_exemptions

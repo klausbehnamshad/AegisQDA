@@ -1,0 +1,12 @@
+# Beispielstruktur eines Modell-Manifests (PR4 implementiert die Erzeugung).
+# Jeder Fingerprint ist sha256, lowercase hex, 64 Zeichen.
+
+language: de
+package_name: de_core_news_lg
+package_version: "3.7.0"
+model_tree_sha256: "REPLACE-ME-64hex-fingerprint-of-model-directory"
+meta_json_sha256: "REPLACE-ME-64hex-fingerprint-of-meta-json"
+tokenizer_config_sha256: "REPLACE-ME-64hex-fingerprint-of-tokenizer-config"
+recognizer_pack_sha256: "REPLACE-ME-64hex-fingerprint-of-recognizer-pack"
+threshold: 0.5
+qualification_suite_sha256: "REPLACE-ME-64hex-of-annotated-interview-suite"

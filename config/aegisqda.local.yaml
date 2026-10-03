@@ -16,6 +16,12 @@ models:
   dpo_approved_local_allowlist:
     - "gemma3:4b"
     - "gemma4:e4b"
+  # Exact digests already qualified in docs/COMPATIBILITY_EVIDENCE.md.
+  dpo_approved_local_pairs:
+    - tag: "gemma3:4b"
+      digest: "a2af6cc3eb7fa8be8504abaf9b04e88f17a119ec3f04a3addf55f92841195f5a"
+    - tag: "gemma4:e4b"
+      digest: "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
   require_exact_ollama_tag: true
   require_digest_binding: true
   forbid_silent_fallback: true
@@ -38,3 +44,12 @@ authorization:
   real_data_enabled: false
   required_attestation_schema: "aegisqda-infrastructure-attestation-v1"
   trusted_review_key_ids: []
+
+# Governance contract (PR1 declaration; PR2/PR3/PR4 wire enforcement).
+# Trust-store/retained-risk switches cannot be enabled until their complete
+# enforcement exists. Configuration rejects unsupported governance settings.
+governance:
+  contract_version: "v0.1.0"
+  trust_store_path: null
+  allow_retained_risk_claim: false
+  two_person_release_required: true

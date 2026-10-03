@@ -8,7 +8,6 @@ import ipaddress
 import json
 import os
 import re
-import socket
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -25,6 +24,7 @@ PROXY_VARIABLES = (
     "https_proxy",
     "all_proxy",
 )
+MAX_OLLAMA_METADATA_BYTES = 4 * 1024 * 1024
 
 
 def reject_proxy_environment(environment: dict[str, str] | None = None) -> None:
@@ -35,38 +35,71 @@ def reject_proxy_environment(environment: dict[str, str] | None = None) -> None:
 
 
 def validate_loopback_url(value: str) -> str:
-    parsed = urlsplit(value)
-    if parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password:
+    try:
+        if not isinstance(value, str) or any(ord(character) <= 32 for character in value):
+            raise ValueError("invalid URL characters")
+        parsed = urlsplit(value)
+        port = parsed.port if parsed.port is not None else 80
+    except ValueError as exc:
+        raise BoundaryError("Ollama URL has invalid local endpoint syntax") from exc
+    if (
+        parsed.scheme != "http" or not parsed.hostname
+        or parsed.username is not None or parsed.password is not None
+    ):
         raise BoundaryError("Ollama URL must be unauthenticated loopback HTTP")
     if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
         raise BoundaryError("Ollama base URL cannot contain a path, query, or fragment")
+    # Never resolve a user-controlled DNS name. A separate validation lookup
+    # could return loopback while the subsequent HTTP lookup returns remote.
+    # Normalize the conventional local name to a literal before any request.
+    hostname = "127.0.0.1" if parsed.hostname.casefold() == "localhost" else parsed.hostname
     try:
-        addresses = {item[4][0] for item in socket.getaddrinfo(parsed.hostname, parsed.port or 80)}
-    except socket.gaierror as exc:
-        raise BoundaryError("Ollama host cannot be resolved") from exc
-    if not addresses or not all(ipaddress.ip_address(address).is_loopback for address in addresses):
-        raise BoundaryError("Ollama endpoint is not exclusively loopback")
-    return value.rstrip("/")
+        if "%" in hostname:
+            raise ValueError("scoped address")
+        address = ipaddress.ip_address(hostname)
+    except ValueError as exc:
+        raise BoundaryError("Ollama endpoint must use localhost or a literal loopback IP") from exc
+    if not address.is_loopback or port < 1:
+        raise BoundaryError("Ollama endpoint is not exclusively valid loopback")
+    host = f"[{address.compressed}]" if address.version == 6 else address.compressed
+    return f"http://{host}:{port}"
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A loopback service cannot redirect our requests across the boundary."""
+
+    def redirect_request(
+        self, req: urllib.request.Request, fp: object, code: int,
+        msg: str, headers: object, newurl: str,
+    ) -> None:
+        return None
 
 
 def ollama_models(base_url: str, *, timeout: float = 2.0) -> dict[str, str]:
     base_url = validate_loopback_url(base_url)
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
     request = urllib.request.Request(base_url + "/api/tags", method="GET")
     try:
         with opener.open(request, timeout=timeout) as response:
-            payload = json.loads(response.read())
-    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            raw = response.read(MAX_OLLAMA_METADATA_BYTES + 1)
+            if len(raw) > MAX_OLLAMA_METADATA_BYTES:
+                raise BoundaryError("local Ollama model metadata exceeds the local inventory bound")
+            payload = json.loads(raw)
+    except (OSError, urllib.error.URLError, json.JSONDecodeError, UnicodeError) as exc:
         raise BoundaryError("local Ollama is unavailable or returned invalid model metadata") from exc
     models = payload.get("models") if isinstance(payload, dict) else None
     if not isinstance(models, list):
         raise BoundaryError("local Ollama model metadata has an unexpected schema")
     result: dict[str, str] = {}
     for item in models:
-        if isinstance(item, dict) and isinstance(item.get("name"), str):
-            digest = item.get("digest")
-            if isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest):
-                result[item["name"]] = digest
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str) or not item["name"]:
+            raise BoundaryError("local Ollama model metadata contains an invalid model record")
+        digest = item.get("digest")
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise BoundaryError("local Ollama model metadata contains an invalid model digest")
+        if item["name"] in result:
+            raise BoundaryError("local Ollama model metadata contains an ambiguous duplicate tag")
+        result[item["name"]] = digest
     return result
 
 

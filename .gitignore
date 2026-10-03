@@ -16,7 +16,12 @@ review/
 quarantine/
 mappings/
 secrets/
+outputs/
+sources/
+artifacts/
+Claude outputs/
 *.key
 *.pem
+*.p12
+*.pfx
 .env
-

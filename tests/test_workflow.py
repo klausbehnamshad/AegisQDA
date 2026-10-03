@@ -230,7 +230,7 @@ def test_generalize_action_requires_explicit_resolution(tmp_path: Path) -> None:
         [{"finding_id": finding["finding_id"], "decision": "GENERALIZE_CONFIRMED"}],
     )
     transform_run(run_dir)
-    assert "[DATE_TIME_GENERALIZED_001]" in (run_dir / "transformed.txt").read_text()
+    assert "[YEAR_2026]" in (run_dir / "transformed.txt").read_text()
 
 
 def test_block_action_cannot_be_confirmed(tmp_path: Path) -> None:

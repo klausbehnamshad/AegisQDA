@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Literal
 
 import yaml  # type: ignore[import-untyped]
@@ -43,9 +43,23 @@ class LanguageConfig(StrictModel):
         return self
 
 
+APPROVED_MODEL_PAIRS = {
+    "gemma3:4b": "a2af6cc3eb7fa8be8504abaf9b04e88f17a119ec3f04a3addf55f92841195f5a",
+    "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+}
+
+
+class PinnedModel(StrictModel):
+    tag: str
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class ModelConfig(StrictModel):
     default: Literal["gemma3:4b"]
     dpo_approved_local_allowlist: list[str]
+    dpo_approved_local_pairs: list[PinnedModel] = Field(default_factory=lambda: [
+        PinnedModel(tag=tag, digest=digest) for tag, digest in APPROVED_MODEL_PAIRS.items()
+    ])
     require_exact_ollama_tag: Literal[True]
     require_digest_binding: Literal[True]
     forbid_silent_fallback: Literal[True]
@@ -54,6 +68,11 @@ class ModelConfig(StrictModel):
     def exact_allowlist(self) -> "ModelConfig":
         if self.dpo_approved_local_allowlist != ["gemma3:4b", "gemma4:e4b"]:
             raise ValueError("model allowlist differs from the encoded DPO boundary")
+        if (
+            len(self.dpo_approved_local_pairs) != len(APPROVED_MODEL_PAIRS)
+            or {item.tag: item.digest for item in self.dpo_approved_local_pairs} != APPROVED_MODEL_PAIRS
+        ):
+            raise ValueError("model pairs differ from the qualified local evidence")
         return self
 
 
@@ -76,7 +95,57 @@ class DigQDAConfig(StrictModel):
 class AuthorizationConfig(StrictModel):
     real_data_enabled: Literal[False]
     required_attestation_schema: Literal["aegisqda-infrastructure-attestation-v1"]
-    trusted_review_key_ids: list[str]
+    trusted_review_key_ids: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def valid_key_ids(self) -> "AuthorizationConfig":
+        if len(set(self.trusted_review_key_ids)) != len(self.trusted_review_key_ids) or any(
+            re.fullmatch(r"[0-9a-f]{64}", value) is None
+            for value in self.trusted_review_key_ids
+        ):
+            raise ValueError("trusted reviewer IDs must be unique SHA-256 fingerprints")
+        return self
+
+
+class GovernanceConfig(StrictModel):
+    """Governance-contract wiring (PR1 declaration; PR2 enforcement).
+
+    ``contract_version`` pins the version of docs/GOVERNANCE_CONTRACT.md this
+    installation is bound to. Bumping the contract requires a signed successor
+    (see the contract's §9) and an explicit config change here.
+
+    ``trust_store_path`` is where PR2 will look for the signed trust store.
+    Until the complete trust-store enforcement exists this must remain null;
+    unsupported configuration fails closed rather than silently being ignored.
+    The future store must live outside Git and cloud-sync locations.
+
+    ``allow_retained_risk_claim`` mirrors the policy manifest's permission
+    for the ``PROCESS_RELEASED_WITH_RETAINED_RISK`` claim. A `false` here is
+    a hard strict mode. The current implementation rejects true because the
+    full retained-risk authorization chain does not exist yet.
+
+    ``two_person_release_required`` is the switch that turns on the
+    four-eyes rule in PR2. It defaults to ``true`` for real-data mode; the
+    current MVP forces ``real_data_enabled=false`` so this bit only
+    documents the intended default, not an implemented synthetic two-person
+    release. False is refused until a governed successor contract exists.
+    """
+
+    contract_version: str = "v0.1.0"
+    trust_store_path: str | None = None
+    allow_retained_risk_claim: bool = False
+    two_person_release_required: bool = True
+
+    @model_validator(mode="after")
+    def unavailable_capabilities_fail_closed(self) -> "GovernanceConfig":
+        if (
+            self.contract_version != "v0.1.0"
+            or self.trust_store_path is not None
+            or self.allow_retained_risk_claim
+            or not self.two_person_release_required
+        ):
+            raise ValueError("governed release capabilities are not implemented; strict defaults required")
+        return self
 
 
 class AppConfig(StrictModel):
@@ -86,6 +155,10 @@ class AppConfig(StrictModel):
     privacy: PrivacyConfig
     digqda: DigQDAConfig
     authorization: AuthorizationConfig
+    # Governance is optional in the YAML so the config change is
+    # backward-compatible with existing installs. When absent, the default
+    # ``GovernanceConfig()`` is used — the strictest safe defaults.
+    governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
 
 
 class PolicyAction(StrEnum):

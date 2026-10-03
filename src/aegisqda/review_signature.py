@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import os
 import stat
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -70,15 +71,35 @@ def sign_review(payload: dict[str, Any], key_path: Path) -> dict[str, str]:
     }
 
 
-def verify_review_signature(review: dict[str, Any]) -> bool:
+def verify_review_signature(
+    review: dict[str, Any], trusted_key_ids: Collection[str] | None = None
+) -> bool:
+    """Verify integrity and, when supplied, an explicit signing-key allowlist.
+
+    A valid self-signed key proves possession, not institutional authorization.
+    Passing an empty allowlist intentionally trusts no key; ``None`` requests
+    cryptographic verification only.
+    """
     signature = review.get("signature")
     if signature is None:
         return False
     if not isinstance(signature, dict) or signature.get("algorithm") != "Ed25519":
         raise IntegrityError("review signature metadata is invalid")
+    if trusted_key_ids is not None and (
+        isinstance(trusted_key_ids, (str, bytes))
+        or not all(
+            isinstance(item, str)
+            and len(item) == 64
+            and all(character in "0123456789abcdef" for character in item)
+            for item in trusted_key_ids
+        )
+    ):
+        raise IntegrityError("trusted review signing-key allowlist is invalid")
     try:
-        public = base64.b64decode(str(signature["public_key"]), validate=True)
-        signed = base64.b64decode(str(signature["signature"]), validate=True)
+        if not isinstance(signature["public_key"], str) or not isinstance(signature["signature"], str):
+            raise IntegrityError("review signature encoding is invalid")
+        public = base64.b64decode(signature["public_key"], validate=True)
+        signed = base64.b64decode(signature["signature"], validate=True)
         if signature.get("key_id_sha256") != sha256_bytes(public):
             raise IntegrityError("review signing-key fingerprint is invalid")
         payload = {
@@ -89,4 +110,26 @@ def verify_review_signature(review: dict[str, Any]) -> bool:
         Ed25519PublicKey.from_public_bytes(public).verify(signed, canonical_bytes(payload))
     except (KeyError, ValueError, InvalidSignature) as exc:
         raise IntegrityError("review signature verification failed") from exc
+    if trusted_key_ids is not None and signature.get("key_id_sha256") not in trusted_key_ids:
+        raise IntegrityError("review signing key is not in the configured trusted allowlist")
     return True
+
+
+def verify_synthetic_review(review: dict[str, Any], trusted_key_ids: Collection[str]) -> bool:
+    """Apply the fixture-only review boundary without implying a trust store.
+
+    Callers must independently establish ``synthetic_only is True``. The
+    current workflow permits unkeyed fixture reviews; a configured nonempty
+    allowlist constrains every signed review. With no configured keys, signed
+    fixture reviews retain their explicit ``SELF_SIGNED_LOCAL`` assurance.
+    This helper never authorizes real-data processing.
+    """
+    signature = review.get("signature")
+    expected_assurance = "SELF_SIGNED_LOCAL" if signature is not None else "UNKEYED_SYNTHETIC_ONLY"
+    if review.get("assurance") != expected_assurance:
+        raise IntegrityError("synthetic review assurance does not match its signature")
+    if signature is not None and (
+        not isinstance(signature, dict) or signature.get("trust") != "SELF_SIGNED_LOCAL"
+    ):
+        raise IntegrityError("synthetic review must declare its self-signed local assurance")
+    return verify_review_signature(review, trusted_key_ids=trusted_key_ids or None)
