@@ -1,5 +1,8 @@
 # AegisQDA — lokaler DH-Workbench
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21854346.svg)](https://doi.org/10.5281/zenodo.21854346)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 AegisQDA unterstützt qualitative Forschung in den Digital Humanities:
 synthetische Interviews prüfen, belegnah codieren, Codebooks entwickeln,
 reflexive Memos schreiben und mehrere Fälle vergleichend lesen. Eine lokale
@@ -207,3 +210,16 @@ Details: [DH-Arbeitsablauf](docs/DH_WORKBENCH.md),
 [Review und Nachweise](docs/GENERAL_REVIEW_WAVE1.md),
 [Generalisierungsregeln](docs/GENERALIZATION_RULES.md) und
 [Governance-Vertrag](docs/GOVERNANCE_CONTRACT.md).
+
+## Citation
+
+If you use AegisQDA, please cite the archived release:
+
+> Behnam Shad, K. (2026). *AegisQDA — local-first, fail-closed privacy gateway for qualitative data* (v0.1.0). Zenodo. https://doi.org/10.5281/zenodo.21854346
+
+The DOI above is the concept DOI: it always resolves to the most recent version.
+Machine-readable metadata is in [`CITATION.cff`](CITATION.cff).
+
+## License
+
+MIT, see [`LICENSE`](LICENSE).

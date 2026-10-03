@@ -13,7 +13,7 @@ LOCK = json.loads((ROOT / "UPSTREAM.lock.json").read_text(encoding="utf-8"))
 required = [
     ROOT / "config" / "aegisqda.local.yaml",
     ROOT / "policies" / "strict.yaml",
-    ROOT / "docs" / "MEGAPROMPT_NEXT_WINDOW.md",
+    ROOT / "docs" / "BOOTSTRAP_SPEC.md",
     ROOT / LOCK["snapshot_path"] / "digqda",
     ROOT / LOCK["snapshot_path"] / "README.md",
 ]

@@ -1,0 +1,28 @@
+{
+  "title": "AegisQDA — local-first, fail-closed privacy gateway for qualitative data",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "MIT",
+  "description": "AegisQDA is a local-only privacy gateway that prepares interview transcripts for qualitative analysis. Presidio-backed recognition of personal data is combined with a mandatory terminal review: identifiers are replaced by typed, document-local surrogates, a second pass verifies structure, and data is released to a downstream QDA adapter only after a cryptographically signed reviewer attestation. There is no auto-approve path. Processing is local by construction: the tool refuses to run while proxy environment variables are set, and only approved local models are permitted.\n\nScope and status. This record archives a tagged source release of an MVP. It contains software and no research data. Development and testing were carried out on a synthetic corpus in German, English and French; real-data authorisation is deliberately not enabled in this release. AegisQDA does not claim to guarantee anonymity. The accompanying tests demonstrate that the detection, review and transformation path behaves as specified. They are not a validation study of anonymisation quality on real material and should not be cited as one.",
+  "creators": [
+    {
+      "name": "Behnam Shad, Klaus",
+      "orcid": "0000-0002-3601-9024",
+      "affiliation": "Luxembourg Centre for Contemporary and Digital History (C2DH), University of Luxembourg"
+    }
+  ],
+  "keywords": [
+    "anonymisation",
+    "de-identification",
+    "data protection",
+    "GDPR",
+    "privacy by design",
+    "local-first",
+    "human-in-the-loop",
+    "personally identifiable information",
+    "qualitative data analysis",
+    "research data management",
+    "interview data",
+    "oral history"
+  ]
+}

@@ -61,8 +61,8 @@ Aus dem Review sind weitere ausführbare Bausteine entstanden:
 Die README beschreibt jetzt den DH-Arbeitsablauf von Privacy-Review bis Retrieval,
 Coding, Memos und Fallvergleich. Die verwaiste, seit Juli unveränderte leere
 `.git/index.lock` wurde nach zweimaliger Prüfung ohne offenen Prozesshandle
-entfernt. Branch `codex/optimization-wave-1` blieb erhalten. Keine Staging-,
-Commit- oder Push-Aktion wurde dabei ausgeführt.
+entfernt. Der bestehende Arbeitsbranch blieb erhalten. Bei dieser Prüfung
+wurde keine Staging-, Commit- oder Push-Aktion ausgeführt.
 
 Folgeausbau geprüft: **618 Tests erfolgreich**. Die vollständige Suite bestand
 mit 616 Tests in der eingeschränkten Sandbox; zwei bestehende HTTP-Transporttests
@@ -93,8 +93,8 @@ Inventar und Forschungsfunktionen erteilen weiterhin keine Pilotfreigabe.
    Mehrfall-, Retrieval-, Matrix- und Dissensfunktionen; Auswahl flexibler
    analytischer Segmente. Reliabilitätsmaße nur bei passender Methode.
 
-Kommunikation: neutrale Anerkennung als KI-gestütztes Code-Review, keine fremde
-Urheberschaftsbehauptung und kein verbindliches Ein-Wochen-Antwortversprechen.
+Kommunikation: sachliche Beschreibung der geprüften Änderungen und ihrer
+Grenzen; kein verbindliches Ein-Wochen-Antwortversprechen.
 Release, öffentliche Advisory-Veröffentlichung und Ankündigungen sind nicht erfolgt.
 
 ## Reproduzierbare Prüfung
