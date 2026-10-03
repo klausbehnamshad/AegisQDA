@@ -7,7 +7,7 @@ import importlib.metadata
 import importlib.util
 import re
 from bisect import bisect_right
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from functools import lru_cache
 from typing import Iterable, Iterator
 
@@ -67,10 +67,20 @@ TRANSCRIPT_ROLE_MARKERS = {"I", "P"}
 # only when the cue directly introduces a detected structured value.
 STRUCTURED_FIELD_CUES = {"IBAN": "IBAN_CODE"}
 
+RECOGNIZER_PACK = "aegis-custom-strict-v3"
+# Packs with a published privacy defect. Runs scanned with them cannot be
+# reviewed, transformed or analyzed; the source has to be scanned again.
+REVOKED_RECOGNIZER_PACKS = {
+    "aegis-custom-strict-v1": "AEGIS-2026-001",
+    "aegis-custom-strict-v2": "AEGIS-2026-001",
+}
 SCORE_THRESHOLD = 0.5
 # spaCy refuses longer texts (Language.max_length, error E088); fail with a
 # clear boundary message instead of an unexplained processing failure.
 MAX_SCAN_CHARS = 1_000_000
+
+# recognition_metadata key that links the per-line pieces of one analyzer span.
+GROUP_KEY = "aegis_group"
 
 # Exact shape of a surrogate emitted by transform_run, e.g. [PERSON_001]. Only
 # this shape is skipped: a blanket bracket exemption would also hide real
@@ -88,6 +98,9 @@ class Finding:
     recognizer: str
     action: str
     value_sha256: str
+    # Shared by the per-line pieces of one mention that crossed a line break,
+    # so they are reviewed together and replaced by one surrogate.
+    group_id: str | None = None
 
     def public_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -268,8 +281,23 @@ def detector_versions(language: str) -> dict[str, object]:
         "nlp_strategy": installed_model or f"spacy.blank:{language}",
         "ner_model": installed_model,
         "threshold": SCORE_THRESHOLD,
-        "recognizer_pack": "aegis-custom-strict-v3",
+        "recognizer_pack": RECOGNIZER_PACK,
     }
+
+
+def stale_pack_reason(detection: dict[str, object]) -> str | None:
+    """Explain why a run's detection cannot be used with this detector, if so."""
+    detector = detection.get("detector")
+    pack = detector.get("recognizer_pack") if isinstance(detector, dict) else None
+    if pack == RECOGNIZER_PACK:
+        return None
+    advisory = REVOKED_RECOGNIZER_PACKS.get(str(pack))
+    if advisory:
+        return (
+            f"run was scanned with recognizer pack {pack}, which is affected by advisory "
+            f"{advisory}; scan the source again"
+        )
+    return f"run was scanned with recognizer pack {pack}, not {RECOGNIZER_PACK}; scan the source again"
 
 
 def _region_pieces(
@@ -299,10 +327,16 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
     # is split into per-line pieces; dropping it would silently hide it.
     starts = [region.start for region in document.regions]
     candidates = []
-    for item in results:
-        for piece_start, piece_end in _region_pieces(item.start, item.end, document.regions, starts):
+    for number, item in enumerate(results):
+        pieces = _region_pieces(item.start, item.end, document.regions, starts)
+        for piece_start, piece_end in pieces:
             piece = copy.copy(item)
             piece.start, piece.end = piece_start, piece_end
+            if len(pieces) > 1:
+                piece.recognition_metadata = {
+                    **(item.recognition_metadata or {}),
+                    GROUP_KEY: number,
+                }
             candidates.append(piece)
     candidates.sort(key=lambda item: (item.start, -(item.end - item.start), item.entity_type))
     strong_candidates = [item for item in candidates if item.entity_type in STRONG_STRUCTURED_TYPES]
@@ -375,6 +409,25 @@ def scan_document(document: Document, language: str, policy: Policy) -> list[Fin
                 recognizer=str(item.recognition_metadata.get("recognizer_name", "AegisRule")),
                 action=policy.action_for(item.entity_type).value,
                 value_sha256=sha256_bytes(value.encode()),
+                group_id=item.recognition_metadata.get(GROUP_KEY),
             )
         )
-    return findings
+    return _number_groups(findings)
+
+
+def _number_groups(findings: list[Finding]) -> list[Finding]:
+    """Keep groups that still have several pieces and number them G-0001..."""
+    sizes: dict[object, int] = {}
+    for finding in findings:
+        if finding.group_id is not None:
+            sizes[finding.group_id] = sizes.get(finding.group_id, 0) + 1
+    names: dict[object, str] = {}
+    numbered: list[Finding] = []
+    for finding in findings:
+        group = finding.group_id
+        if group is not None and sizes[group] > 1:
+            names.setdefault(group, f"G-{len(names) + 1:04d}")
+            numbered.append(replace(finding, group_id=names[group]))
+        else:
+            numbered.append(replace(finding, group_id=None))
+    return numbered

@@ -44,6 +44,12 @@ post-output identifier scan ------------- methodological review still required
 - SRT cue numbers and time ranges must remain byte-equivalent.
 - TXT newline count and unit boundaries must remain stable.
 - Replacements may change character length but may not create or remove lines.
+- A mention that crosses a line break (for example a name wrapped inside a
+  two-line SRT cue) is reviewed as one mention and replaced by one surrogate on
+  its first line. The surrogate is keyed by the whole mention, so `Maria` +
+  `Gonzalez` on two lines and `Maria Gonzalez` on one line share it. The rest of
+  the mention is removed from the following line; when that would leave the
+  line empty, it becomes the continuation mark `[…]` so the structure holds.
 - DigQDA quote validation binds against the transformed source, never silently
   against the protected original.
 

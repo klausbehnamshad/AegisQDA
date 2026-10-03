@@ -61,6 +61,8 @@ RUN=/private/tmp/aegisqda-runs/SYNTH-DE-CLEAN/run-XXXXXX
 
 For the block-demo, `review` offers only `[f]`/`[a]` on the indirect identifiers;
 the correct action is abort. For the safe control, `review` shows no findings.
+A mention split across lines is shown once, with its context across the line
+break, and one decision covers all of its pieces.
 
 After the findings, `review` asks whether to add a missed detection. Type the
 exact missed text and every occurrence inside a content line is added (spans an
